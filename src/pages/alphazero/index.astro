@@ -1,0 +1,338 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="AlphaZero -- Connect Four Overview" description="Overview of the AlphaZero Connect Four project: self-play training, ResNet with dual heads, 82.5% win rate after 50 iterations, 16 minutes on RTX 5080.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <!-- Header -->
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-green">AlphaZero</span>
+        <span class="tag tag-blue">MCTS</span>
+        <span class="tag tag-purple">ResNet</span>
+        <span class="tag">Self-Play</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        AlphaZero -- Connect Four
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        Pure self-play reinforcement learning with no domain knowledge. A ResNet with dual policy
+        and value heads, guided by MCTS, learns Connect Four from scratch in 16 minutes.
+      </p>
+    </div>
+
+    <!-- Key metrics -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;">
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-green);">82.5%</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Win Rate vs Random</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-blue);">50</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Self-Play Iterations</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-orange);">16 min</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Training Time (RTX 5080)</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-purple);">0</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Human Knowledge Used</div>
+      </div>
+    </div>
+
+    <!-- ===================== WHAT IS ALPHAZERO ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        What Is AlphaZero?
+      </h2>
+      <div class="prose">
+        <p>
+          AlphaZero (Silver et al., DeepMind, 2018) is a reinforcement learning algorithm that
+          achieves superhuman performance on board games using only three inputs: the game rules,
+          the reward signal (win/draw/loss), and compute.
+        </p>
+        <p>
+          What makes it remarkable:
+        </p>
+        <ul>
+          <li><strong>No domain knowledge:</strong> No opening books, no endgame tables, no hand-crafted evaluation functions</li>
+          <li><strong>No human data:</strong> Learns entirely from self-play -- playing against itself</li>
+          <li><strong>General:</strong> The same algorithm mastered Chess, Shogi, and Go with only the game rules changed</li>
+          <li><strong>Superhuman:</strong> Defeated world-champion Stockfish (Chess) and AlphaGo (Go) decisively</li>
+          <li><strong>Elegant:</strong> Combines two powerful ideas -- deep neural networks and tree search -- in a virtuous cycle</li>
+        </ul>
+        <p>
+          This project implements AlphaZero for Connect Four (6x7 board, 7 actions), TicTacToe
+          (3x3), and Gomoku (15x15). Connect Four is the flagship because it's complex enough
+          to be interesting (provably solvable with perfect play, but strategically rich) while
+          still trainable in minutes on consumer hardware.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== PROJECT OVERVIEW ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Project Overview
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.6rem;">Connect Four</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Board: 6 rows x 7 columns</li>
+            <li>Action space: 7 columns</li>
+            <li>State: 3-channel board encoding</li>
+            <li>Win condition: 4 in a row</li>
+            <li>Provably solvable (first player wins with perfect play)</li>
+          </ul>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.6rem;">TicTacToe</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Board: 3x3 = 9 cells</li>
+            <li>Action space: 9 positions</li>
+            <li>Simplest test case</li>
+            <li>Provably draw with perfect play</li>
+            <li>Converges in &lt;1 minute</li>
+          </ul>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <h3 style="color: var(--accent-purple); margin-bottom: 0.6rem;">Gomoku</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Board: 15x15 = 225 cells</li>
+            <li>Action space: 225 positions</li>
+            <li>Win condition: 5 in a row</li>
+            <li>Requires heavier network (20 res blocks)</li>
+            <li>Trains in ~2 hours</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ARCHITECTURE OVERVIEW ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Architecture Overview
+      </h2>
+      <div class="prose">
+        <p>
+          The neural network is a ResNet with dual heads:
+        </p>
+      </div>
+
+      <pre><code>
+  Board Input:  3 x 6 x 7  (player, opponent, empty channels)
+        |
+  +-----+---------------------------------------------------+
+  |  Start Block: Conv2d(3->64, 3x3) + BatchNorm + ReLU      |
+  +-----+---------------------------------------------------+
+        |
+  +-----+---------------------------------------------------+
+  |  Residual Block 1: [Conv->BN->ReLU->Conv->BN] + skip + ReLU |
+  +-----+---------------------------------------------------+
+  |  Residual Block 2                                        |
+  +-----+---------------------------------------------------+
+  |  Residual Block 3                                        |
+  +-----+---------------------------------------------------+
+  |  Residual Block 4                                        |
+  +-----+---------------------------------------------------+
+        |
+   +----+----+
+   |         |
+   ?         ?
++------+ +-------+
+|Policy| |Value  |
+|Head  | |Head   |
+|->[7]  | |->scalar|
+|softmax  |tanh   |
++------+ +-------+
+  pi(s)       V(s)
+</code></pre>
+
+      <div class="callout callout-info" style="margin-top: 1rem;">
+        <strong>Dual head design:</strong> Both heads share the same backbone (residual tower). This
+        forces the network to build representations useful for both move selection (policy) and
+        position evaluation (value) simultaneously -- more efficient than two separate networks.
+      </div>
+    </section>
+
+    <!-- ===================== SELF-PLAY LOOP OVERVIEW ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        The Self-Play Loop
+      </h2>
+      <div class="prose">
+        <p>
+          The training loop alternates between self-play and network updates:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.2rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-blue);">
+          <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; color: var(--accent-blue); margin-bottom: 0.5rem;">STEP 1</div>
+          <h3 style="margin-bottom: 0.6rem;">Self-Play</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Play N games using MCTS guided by current network. Each move uses 50-400 simulations.
+            Record (state, visit_counts, outcome) triples.
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; color: var(--accent-orange); margin-bottom: 0.5rem;">STEP 2</div>
+          <h3 style="margin-bottom: 0.6rem;">Training</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Shuffle collected data, sample batches, compute cross-entropy + MSE loss, update
+            network weights. Repeat for several epochs.
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; color: var(--accent-green); margin-bottom: 0.5rem;">STEP 3</div>
+          <h3 style="margin-bottom: 0.6rem;">Evaluation</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Every 5 iterations, play vs random opponent to measure progress. Track win rate.
+            Log metrics for analysis.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== WHY CONNECT FOUR ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Why Connect Four Is Interesting
+      </h2>
+      <div class="prose">
+        <p>
+          Connect Four is a surprisingly rich environment for studying AlphaZero:
+        </p>
+        <ul>
+          <li>
+            <strong>Theoretically solved but practically complex:</strong> Victor Allis proved in 1988 that first player always wins with perfect play. But discovering this strategy from scratch via self-play is non-trivial -- the agent must learn opening theory, threat creation, and double-threat setups.
+          </li>
+          <li>
+            <strong>Compact action space (7 actions):</strong> Fast to train, easy to visualise MCTS visit counts, clear proof of learning.
+          </li>
+          <li>
+            <strong>Strategic depth:</strong> Requires planning 10-20 moves ahead. Concepts like "odd/even threats" and "zugzwang" emerge naturally from self-play.
+          </li>
+          <li>
+            <strong>Deterministic and perfect information:</strong> AlphaZero's theoretical analysis applies directly -- no noise, no hidden information.
+          </li>
+        </ul>
+        <p>
+          The 82.5% win rate against a random opponent after 50 iterations shows the agent has
+          learned meaningful strategy. A random player wins only ~50% of games against another
+          random player; at 82.5%, the AlphaZero agent is consistently making better decisions.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--text-secondary);">50%</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">Random vs Random</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.5rem;">-></div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-green);">82.5%</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">AlphaZero vs Random (iter 50)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== HARDWARE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Hardware
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-green);">RTX 5080</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">GPU</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-blue);">16 GB VRAM</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Total available</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-orange);">~400 MB</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">VRAM used (base config)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-purple);">36%</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">GPU utilisation</div>
+        </div>
+      </div>
+
+      <div class="prose" style="margin-top: 1.2rem;">
+        <p>
+          The bottleneck is CPU-side: MCTS simulation is sequential (each simulation depends on
+          the result of the previous selection), and Python's GIL limits parallelism. GPU
+          utilisation at 36% indicates the GPU is waiting for the CPU to supply batches. A C++
+          implementation or batched MCTS (running multiple games in parallel) would improve this.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SUB-PAGES ===================== -->
+    <section style="margin-bottom: 2.5rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Deep-Dive Sub-Pages
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem;">
+        <a href={`${base}alphazero/mcts/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-blue)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">?</div>
+            <h3 style="color: var(--accent-blue); margin-bottom: 0.5rem;">MCTS Deep Dive</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              PUCT formula, node structure, backpropagation, Dirichlet noise, temperature,
+              and why more simulations = stronger play.
+            </p>
+          </div>
+        </a>
+        <a href={`${base}alphazero/network/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-purple)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">[brain]</div>
+            <h3 style="color: var(--accent-purple); margin-bottom: 0.5rem;">Neural Network</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              ResNet architecture, dual heads, board encoding, loss functions, WDL variant,
+              and gradient flow through skip connections.
+            </p>
+          </div>
+        </a>
+        <a href={`${base}alphazero/training/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-green)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">?</div>
+            <h3 style="color: var(--accent-green); margin-bottom: 0.5rem;">Self-Play Training</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              Full training loop, replay buffer, loss curves, evaluation protocol, and the
+              expert iteration insight that makes it all work.
+            </p>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem;">
+      <a href={`${base}background/mcts/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        MCTS Background
+      </a>
+      <a href={`${base}compare/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Compare with Tetris DQN
+      </a>
+    </div>
+
+  </div>
+</Layout>

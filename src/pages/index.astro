@@ -1,0 +1,152 @@
+---
+import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Home" description="ML Portfolio -- Deep RL projects: AlphaZero Connect Four & Tetris DQN with CUDA">
+  <!-- Hero -->
+  <section style="max-width: 1100px; margin: 0 auto; padding: 5rem 1.5rem 4rem;">
+    <div style="max-width: 700px;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+        <span class="tag tag-blue">Deep Reinforcement Learning</span>
+        <span class="tag tag-purple">CUDA / PyTorch</span>
+        <span class="tag tag-green">C++ / LibTorch</span>
+        <span class="tag tag-orange">Self-Play . MCTS . DQN</span>
+      </div>
+      <h1 style="font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; margin-bottom: 1.25rem;">
+        Training Game-Playing AIs<br/>
+        <span class="gradient-text">from Scratch with CUDA</span>
+      </h1>
+      <p style="font-size: 1.15rem; color: var(--text-secondary); line-height: 1.8; margin-bottom: 2rem; max-width: 580px;">
+        Two complete deep RL projects -- an <strong style="color: var(--text-primary)">AlphaZero implementation</strong>
+        that masters Connect Four via self-play MCTS, and a <strong style="color: var(--text-primary)">DQN agent</strong>
+        that clears 22,645 Tetris lines -- built end-to-end with GPU acceleration.
+      </p>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href={`${base}tetris`} style="background: var(--accent-blue); color: #0d1117; padding: 0.7rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 0.95rem;">Explore Tetris DQN -></a>
+        <a href={`${base}alphazero`} style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); padding: 0.7rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 0.95rem;">Explore AlphaZero -></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats bar -->
+  <section style="border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
+    <div style="max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; text-align: center;">
+      <div><div style="font-size: 2rem; font-weight: 800; color: var(--accent-green);">22,645</div><div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Tetris lines cleared (best)</div></div>
+      <div><div style="font-size: 2rem; font-weight: 800; color: var(--accent-blue);">82.5%</div><div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">AlphaZero win rate vs random</div></div>
+      <div><div style="font-size: 2rem; font-weight: 800; color: var(--accent-purple);">400</div><div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">MCTS simulations per move</div></div>
+      <div><div style="font-size: 2rem; font-weight: 800; color: var(--accent-orange);">~400K</div><div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">DQN total parameters</div></div>
+      <div><div style="font-size: 2rem; font-weight: 800; color: var(--accent-cyan);">2</div><div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">CUDA-accelerated projects</div></div>
+    </div>
+  </section>
+
+  <!-- Project cards -->
+  <section style="max-width: 1100px; margin: 0 auto; padding: 4rem 1.5rem;">
+    <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem;">Projects</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+
+      <div class="stat-card" style="border-color: rgba(63,185,80,0.3);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="font-size: 2rem;">[brick]</div>
+          <div>
+            <div style="font-weight: 700; font-size: 1.1rem;">Tetris DQN</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">Deep Q-Network . C++ . LibTorch</div>
+          </div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+          A value-based RL agent trained entirely in C++ with LibTorch. Uses handcrafted 40-dimensional board features,
+          experience replay, and reward shaping experiments to survive 22,000+ line clears.
+          Includes a React dashboard for frame-by-frame neural network visualization.
+        </p>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+          <span class="tag tag-green">DQN</span>
+          <span class="tag tag-blue">C++17</span>
+          <span class="tag tag-orange">LibTorch</span>
+          <span class="tag tag-purple">SDL2</span>
+          <span class="tag">React</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+          <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.6rem 0.75rem;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">22,645</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Best lines cleared</div>
+          </div>
+          <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.6rem 0.75rem;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-blue);">128</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Optimal hidden units</div>
+          </div>
+        </div>
+        <a href={`${base}tetris`} style="color: var(--accent-green); font-size: 0.875rem; font-weight: 600; text-decoration: none;">Read the deep dive -></a>
+      </div>
+
+      <div class="stat-card" style="border-color: rgba(88,166,255,0.3);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="font-size: 2rem;">[game]</div>
+          <div>
+            <div style="font-weight: 700; font-size: 1.1rem;">AlphaZero -- Connect Four</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">MCTS + ResNet . Python . PyTorch</div>
+          </div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+          A faithful AlphaZero implementation that learns Connect Four purely through self-play.
+          A ResNet policy+value network is guided by PUCT Monte Carlo Tree Search, with a
+          progressive curriculum scaling from 50 to 400 simulations per move.
+        </p>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+          <span class="tag tag-blue">AlphaZero</span>
+          <span class="tag tag-purple">MCTS</span>
+          <span class="tag tag-orange">ResNet</span>
+          <span class="tag tag-green">PyTorch</span>
+          <span class="tag">CUDA</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+          <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.6rem 0.75rem;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-blue);">82.5%</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Win rate (50 iters)</div>
+          </div>
+          <div style="background: var(--bg-secondary); border-radius: 6px; padding: 0.6rem 0.75rem;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-purple);">400</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Max MCTS sims/move</div>
+          </div>
+        </div>
+        <a href={`${base}alphazero`} style="color: var(--accent-blue); font-size: 0.875rem; font-weight: 600; text-decoration: none;">Read the deep dive -></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Learning path -->
+  <section style="max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem;">
+    <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">Learning Path</h2>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 2rem;">New to RL? Start here and build up to the full implementations.</p>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <a href={`${base}background/rl`} class="step-link" style="display:flex;align-items:center;gap:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-decoration:none;">
+        <span style="font-size:0.75rem;font-weight:700;color:var(--accent-blue);min-width:2rem;font-family:monospace;">01</span>
+        <div><div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">Reinforcement Learning Fundamentals</div><div style="font-size:0.825rem;color:var(--text-secondary);margin-top:0.15rem;">MDPs, rewards, policies, Q-learning -- the building blocks.</div></div>
+        <span style="margin-left:auto;color:var(--accent-blue);">-></span>
+      </a>
+      <a href={`${base}background/mcts`} class="step-link" style="display:flex;align-items:center;gap:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-decoration:none;">
+        <span style="font-size:0.75rem;font-weight:700;color:var(--accent-purple);min-width:2rem;font-family:monospace;">02</span>
+        <div><div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">MCTS & AlphaZero Theory</div><div style="font-size:0.825rem;color:var(--text-secondary);margin-top:0.15rem;">How Monte Carlo Tree Search works, PUCT formula, and the AlphaZero algorithm.</div></div>
+        <span style="margin-left:auto;color:var(--accent-purple);">-></span>
+      </a>
+      <a href={`${base}tetris`} class="step-link" style="display:flex;align-items:center;gap:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-decoration:none;">
+        <span style="font-size:0.75rem;font-weight:700;color:var(--accent-green);min-width:2rem;font-family:monospace;">03</span>
+        <div><div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">Tetris DQN -- Deep Dive</div><div style="font-size:0.825rem;color:var(--text-secondary);margin-top:0.15rem;">Feature engineering, reward shaping, C++ training pipeline.</div></div>
+        <span style="margin-left:auto;color:var(--accent-green);">-></span>
+      </a>
+      <a href={`${base}alphazero`} class="step-link" style="display:flex;align-items:center;gap:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-decoration:none;">
+        <span style="font-size:0.75rem;font-weight:700;color:var(--accent-orange);min-width:2rem;font-family:monospace;">04</span>
+        <div><div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">AlphaZero -- Deep Dive</div><div style="font-size:0.825rem;color:var(--text-secondary);margin-top:0.15rem;">Self-play, residual networks, expert iteration, CUDA training.</div></div>
+        <span style="margin-left:auto;color:var(--accent-orange);">-></span>
+      </a>
+      <a href={`${base}compare`} class="step-link" style="display:flex;align-items:center;gap:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;text-decoration:none;">
+        <span style="font-size:0.75rem;font-weight:700;color:var(--accent-cyan);min-width:2rem;font-family:monospace;">05</span>
+        <div><div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">DQN vs AlphaZero -- Comparison</div><div style="font-size:0.825rem;color:var(--text-secondary);margin-top:0.15rem;">Value-based vs policy-based RL. When to use each. Key lessons.</div></div>
+        <span style="margin-left:auto;color:var(--accent-cyan);">-></span>
+      </a>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .step-link:hover { border-color: var(--accent-blue) !important; transform: translateX(4px); transition: all 0.15s; }
+</style>

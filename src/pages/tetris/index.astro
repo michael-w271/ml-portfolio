@@ -1,0 +1,403 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Tetris DQN -- Overview" description="Overview of the Tetris DQN project: 22,645 lines cleared using a C++/LibTorch DQN agent with handcrafted features, reward shaping, and afterstate evaluation.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <!-- Header -->
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-blue">DQN</span>
+        <span class="tag tag-orange">C++17</span>
+        <span class="tag tag-green">LibTorch 2.7</span>
+        <span class="tag">SDL2</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        Tetris DQN
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        A Deep Q-Network agent trained entirely from scratch in C++17 with LibTorch, achieving
+        22,645 cleared lines through careful reward shaping and afterstate evaluation.
+      </p>
+    </div>
+
+    <!-- Key metrics -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;">
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-blue);">22,645</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Lines Cleared (best run)</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-green);">40</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Input Features</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-orange);">128</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Optimal Hidden Units</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 2.4rem; font-weight: 800; color: var(--accent-purple);">40</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Actions Evaluated/Step</div>
+      </div>
+    </div>
+
+    <!-- ===================== PROJECT SUMMARY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Project Summary
+      </h2>
+      <div class="prose">
+        <p>
+          Tetris presents a fascinating RL challenge: the action space is large (up to 40 distinct
+          placements per piece), the board state is high-dimensional (~200 cells), consequences of
+          actions are delayed (a hole created now causes death many moves later), and the reward
+          signal -- line clears -- is sparse unless carefully augmented.
+        </p>
+        <p>
+          This project trains a DQN agent entirely in <strong>C++17 with LibTorch</strong> (the
+          C++ distribution of PyTorch). The implementation includes a full Tetris engine, SDL2
+          visualisation, a React dashboard for monitoring training metrics, and an experimental
+          afterstate evaluation strategy that evaluates all possible placements at each step.
+        </p>
+        <p>
+          The key research question explored: <em>how much does reward shaping matter?</em>
+          The results are dramatic: an agent trained with only line-clear rewards reaches 216 lines;
+          the same architecture with shaped penalties reaches 22,645 lines -- a 100x improvement.
+        </p>
+      </div>
+
+      <div class="callout callout-success" style="margin-top: 1.5rem;">
+        <strong>Key innovation:</strong> Afterstate evaluation. Rather than choosing a column/rotation
+        action and letting the physics engine place the piece, the agent simulates all 40 possible
+        placements, extracts the feature vector from each resulting afterstate, runs one forward pass
+        through the Q-network for each, and places the piece at the highest-scoring afterstate.
+        This converts a sequential decision problem into a single-step combinatorial optimization.
+      </div>
+    </section>
+
+    <!-- ===================== TECH STACK ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Technology Stack
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.5rem;">C++17</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Core language for the Tetris engine, DQN training loop, and replay buffer.
+            CMake build system with automatic CUDA detection.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <div style="font-weight: 700; color: var(--accent-orange); margin-bottom: 0.5rem;">LibTorch 2.7</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            PyTorch's C++ API. Used for the neural network definition (QNetImpl),
+            forward passes, Huber loss, and Adam optimizer.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <div style="font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem;">SDL2</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Real-time game visualisation. Renders the Tetris board, current piece,
+            ghost piece, and live score during training or evaluation.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <div style="font-weight: 700; color: var(--accent-purple); margin-bottom: 0.5rem;">React Dashboard</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Vite + React + Recharts monitoring dashboard. Reads metrics.jsonl in real-time,
+            plots loss, Q-values, epsilon, and lines-per-episode.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-cyan);">
+          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.5rem;">CUDA</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            GPU acceleration via LibTorch CUDA build. Batch forward passes for the
+            40-placement evaluation run on GPU for maximum throughput.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.5rem;">nlohmann/json</div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            JSON config loading (training_params.json) and metrics serialization
+            (metrics.jsonl) for the monitoring dashboard.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ARCHITECTURE AT A GLANCE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Architecture at a Glance
+      </h2>
+      <div class="prose">
+        <p>
+          The Q-network is a compact MLP. The optimal configuration found through ablation
+          studies uses 128 hidden units with two hidden layers:
+        </p>
+      </div>
+
+      <pre style="margin: 1.5rem 0;"><code>Input Layer          Hidden Layer 1       Hidden Layer 2       Output
+-----------------    -----------------    -----------------    --------
+  40 features    ->   512 neurons (ReLU) -> 512 neurons (ReLU) -> 1 Q-value
+  (feature vec)
+
+Afterstate DQN: one Q-value per state (not per action).
+Agent scores all 40 placements and picks the highest.
+
+Note: During ablation, 128x128 hidden outperformed 512x512.
+The 512 config above is the max tested; optimal was 128.
+See Architecture page for full ablation results.</code></pre>
+
+      <div class="formula-box">
+        <div style="text-align: center; margin-bottom: 0.5rem;">Network dimensions</div>
+        Input: R^40 -> FC(128) -> ReLU -> FC(128) -> ReLU -> FC(1) -> Q-value
+      </div>
+
+      <div class="prose" style="margin-top: 1.5rem;">
+        <h3>Why 40 Features Instead of Raw Pixels?</h3>
+        <p>
+          Raw pixel input (10x20 = 200 binary values) would require a much larger network and
+          many more training steps to learn useful representations. Handcrafted features encode
+          domain knowledge directly:
+        </p>
+        <ul>
+          <li><strong>Column heights</strong>: how high is each of the 10 columns? Directly encodes stack shape.</li>
+          <li><strong>Holes per column</strong>: how many unreachable empty cells in each column? Holes are deadly.</li>
+          <li><strong>Aggregate statistics</strong>: total height, bumpiness, max height, etc.</li>
+          <li><strong>Current piece one-hot</strong>: which of 7 tetrominoes is active?</li>
+          <li><strong>Next piece one-hot</strong>: allows lookahead planning.</li>
+        </ul>
+        <p>
+          These 40 features capture everything a human expert would need to evaluate a Tetris
+          position. The network learns a linear-to-nonlinear mapping from these features to a
+          scalar position quality score.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== FEATURE VECTOR OVERVIEW ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        The 40-Dimensional Feature Vector
+      </h2>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="text-align: left; padding: 0.7rem 1rem; border: 1px solid var(--border);">Indices</th>
+              <th style="text-align: left; padding: 0.7rem 1rem; border: 1px solid var(--border);">Feature Group</th>
+              <th style="text-align: left; padding: 0.7rem 1rem; border: 1px solid var(--border);">Description</th>
+              <th style="text-align: left; padding: 0.7rem 1rem; border: 1px solid var(--border);">Why It Matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">0-9</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Column Heights</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Height of highest occupied cell in each of 10 columns</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Encodes the board profile; high stacks = danger</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">10-19</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Holes per Column</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Count of empty cells below the highest filled cell in each column</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Holes can never be directly filled; they delay line clears indefinitely</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">20</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Aggregate Height</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Sum of all column heights</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Overall measure of board "fullness"</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">21</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Bumpiness</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Sum of absolute differences between adjacent column heights</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Jagged boards create holes; smooth boards are easier to clear</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">22</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Total Holes</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Sum of holes across all columns</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Single most important penalty metric</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">23</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Max Height</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Height of the tallest column</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Game over is imminent when max height approaches 20</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">24</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Lines Cleared</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Number of lines cleared by this placement (0-4)</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Primary positive signal in feature space</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">25</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Covered Cells</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Cells blocked above holes (inaccessible cavities)</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Deep wells are harder to escape than shallow ones</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">26-32</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Current Piece (one-hot)</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">One-hot encoding of current piece type: I, O, T, S, Z, J, L</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Different pieces fit different board profiles</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border); font-family: monospace;">33-39</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Next Piece (one-hot)</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">One-hot encoding of the next queued piece</td>
+              <td style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Allows the agent to plan ahead for the next placement</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== AFTERSTATE STRATEGY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Key Innovation: Afterstate Evaluation
+      </h2>
+      <div class="prose">
+        <p>
+          Standard DQN in Tetris faces a challenge: the traditional action is a (column, rotation)
+          pair, but many such pairs result in the same final board state. Defining rewards in terms
+          of raw actions creates unnecessary ambiguity.
+        </p>
+        <p>
+          Instead, this implementation uses <strong>afterstate evaluation</strong>: for each
+          possible (column, rotation) pair, simulate the piece placement and score the <em>resulting
+          board</em> using the Q-network. Then choose the action that leads to the best-scoring
+          afterstate. This has several advantages:
+        </p>
+        <ul>
+          <li>Eliminates duplicate-state ambiguity (different actions, same board -> same score)</li>
+          <li>The Q-network only needs to predict value of static board states, not action-conditioned values</li>
+          <li>All 40 placements can be batched into one GPU forward pass for efficiency</li>
+          <li>The agent naturally learns to think in terms of board quality, not raw motor commands</li>
+        </ul>
+      </div>
+
+      <pre><code class="language-cpp">// Afterstate evaluation in C++ (simplified)
+int selectBestAction(const GameState& state, QNetwork& net) {'{'}
+    std::vector&lt;float&gt; features_batch;
+
+    // Generate all valid placements
+    auto placements = state.getAllValidPlacements();  // up to 40
+
+    for (auto& placement : placements) {'{'}
+        GameState afterstate = state.simulatePlacement(placement);
+        auto features = afterstate.extractFeatures();  // 40 floats
+        features_batch.insert(features_batch.end(),
+                              features.begin(), features.end());
+    {'}'}
+
+    // Single batched forward pass -- all 40 at once
+    auto input  = torch::tensor(features_batch).reshape({'{'}(long)placements.size(), 40{'}'});
+    auto q_vals = net->forward(input);  // shape: [N, 1]
+
+    // Select placement with maximum Q-value
+    auto best_idx = q_vals.argmax().item&lt;int&gt;();
+    return best_idx;
+{'}'}
+</code></pre>
+    </section>
+
+    <!-- ===================== SUB-PAGES ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Deep-Dive Sub-Pages
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem;">
+        <a href={`${base}tetris/architecture/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); transition: border-color 0.2s; cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-blue)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">[brain]</div>
+            <h3 style="color: var(--accent-blue); margin-bottom: 0.5rem;">Neural Network Architecture</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              Full architecture breakdown, feature formulas, C++ QNetImpl class,
+              ablation study results, and loss function analysis.
+            </p>
+          </div>
+        </a>
+        <a href={`${base}tetris/reward-shaping/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); transition: border-color 0.2s; cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-orange)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">[target]</div>
+            <h3 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Reward Shaping Experiments</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              The most scientifically interesting page. Why sparse rewards fail, what each
+              penalty contributes, and a full results comparison table.
+            </p>
+          </div>
+        </a>
+        <a href={`${base}tetris/training/`} style="text-decoration: none;">
+          <div class="stat-card" style="border: 1px solid var(--border); transition: border-color 0.2s; cursor: pointer;"
+               onmouseover="this.style.borderColor='var(--accent-green)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size: 1.5rem; margin-bottom: 0.6rem;">[gear]</div>
+            <h3 style="color: var(--accent-green); margin-bottom: 0.5rem;">Training Pipeline</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              Experience replay, target network, epsilon schedule, hyperparameters,
+              and convergence analysis. Includes full pseudocode.
+            </p>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===================== MOTIVATION ===================== -->
+    <section style="margin-bottom: 2rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Motivation &amp; Why C++
+      </h2>
+      <div class="prose">
+        <p>
+          Python + PyTorch is the standard for RL research, but production RL systems are often
+          in C++ for performance reasons. Training in C++ with LibTorch required building everything
+          from scratch -- no Gymnasium, no OpenAI Baselines -- which forced a deep understanding of
+          every component.
+        </p>
+        <p>
+          The performance benefit is real: the C++ Tetris engine runs at over 10,000 frames per
+          second, allowing the agent to play millions of steps quickly. The LibTorch batched
+          inference for afterstate evaluation (40 placements per step) is highly efficient with
+          CUDA. Total training time for 500K episodes: approximately 4 hours on a modern GPU.
+        </p>
+        <p>
+          The React monitoring dashboard reads the <code>metrics.jsonl</code> output file in
+          real-time, providing live charts of loss, Q-value magnitude, epsilon decay, and
+          lines-per-episode -- all without leaving the browser.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem;">
+        <a href={`${base}tetris/architecture/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--accent-blue); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Network Architecture ->
+        </a>
+        <a href={`${base}tetris/reward-shaping/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--accent-orange); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Reward Shaping ->
+        </a>
+        <a href={`${base}background/rl/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+          RL Background
+        </a>
+      </div>
+    </section>
+
+  </div>
+</Layout>

@@ -1,0 +1,610 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Reinforcement Learning Fundamentals" description="A thorough introduction to reinforcement learning: MDPs, Q-learning, DQN, and how these foundations connect to the Tetris and AlphaZero projects.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-blue">Theory</span>
+        <span class="tag tag-green">Q-Learning</span>
+        <span class="tag tag-purple">Deep RL</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        Reinforcement Learning Fundamentals
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        The theoretical and practical foundations behind the two major projects on this site --
+        from the Bellman equation to DQN experience replay.
+      </p>
+    </div>
+
+    <!-- Navigation hint -->
+    <div class="callout callout-info" style="margin-bottom: 2.5rem;">
+      <strong>Background page.</strong> This page explains the theory. See
+      <a href={`${base}tetris/`} style="color: var(--accent-blue);">Tetris DQN</a> and
+      <a href={`${base}alphazero/`} style="color: var(--accent-blue);">AlphaZero</a> for the
+      concrete implementations.
+    </div>
+
+    <!-- ===================== SECTION 1: What is RL? ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. What Is Reinforcement Learning?
+      </h2>
+      <div class="prose">
+        <p>
+          Reinforcement learning (RL) is a paradigm of machine learning in which an <strong>agent</strong>
+          learns to make decisions by interacting with an <strong>environment</strong>. Unlike supervised
+          learning, there is no labeled dataset. Unlike unsupervised learning, there is an explicit
+          optimization target: accumulate as much <strong>reward</strong> as possible over time.
+        </p>
+        <p>
+          The agent perceives the world through <strong>states</strong>, selects <strong>actions</strong>,
+          and receives <strong>rewards</strong> that encode how desirable each transition is.
+          Learning happens through trial and error -- the agent tries things, observes consequences,
+          and gradually builds a policy that maximizes long-term returns.
+        </p>
+      </div>
+
+      <!-- Core concepts grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1.8rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.4rem;">Agent</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            The learner and decision-maker. It observes states and chooses actions according to
+            its policy pi(a|s).
+          </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <div style="font-weight: 700; color: var(--accent-green); margin-bottom: 0.4rem;">Environment</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            Everything outside the agent. It receives actions, transitions to a new state, and emits
+            a reward signal.
+          </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <div style="font-weight: 700; color: var(--accent-orange); margin-bottom: 0.4rem;">State s</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            A representation of the current situation. Can be the raw pixels of a game screen, a
+            board configuration, a 40-feature vector, etc.
+          </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <div style="font-weight: 700; color: var(--accent-purple); margin-bottom: 0.4rem;">Action a</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            A choice made by the agent. In Tetris: which column &amp; rotation to place a piece.
+            In Connect Four: which column to drop a disc.
+          </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-cyan);">
+          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.4rem;">Reward r</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            A scalar feedback signal. The agent's sole learning signal -- its job is to maximise the
+            sum of future rewards.
+          </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.4rem;">Episode</div>
+          <div style="color: var(--text-secondary); font-size: 0.92rem;">
+            One complete run from start to terminal state. In Tetris: one game from empty board
+            to game-over. In Connect Four: one match.
+          </div>
+        </div>
+      </div>
+
+      <div class="prose" style="margin-top: 1.8rem;">
+        <p>
+          The fundamental interaction loop is simple:
+        </p>
+      </div>
+      <pre><code>+---------------------------------------------------------+
+|                                                         |
+|   +---------+   action a_t    +---------------------+  |
+|   |         | --------------> |                     |  |
+|   |  Agent  |                 |    Environment      |  |
+|   |         | &lt;-------------- |                     |  |
+|   +---------+  state  s_{'{'}t+1{'}'} +---------------------+  |
+|                reward r_{'{'}t+1{'}'}                           |
+|                                                         |
+|  Goal: maximise  G_t = r_{'{'}t+1{'}'} + gamma r_{'{'}t+2{'}'} + gamma2 r_{'{'}t+3{'}'} + ... |
++---------------------------------------------------------+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 2: MDP ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. The Markov Decision Process
+      </h2>
+      <div class="prose">
+        <p>
+          Reinforcement learning problems are formally specified as <strong>Markov Decision Processes
+          (MDPs)</strong>. An MDP is a 5-tuple:
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1.5rem 0;">
+        <div style="font-size: 1.1rem; text-align: center;">
+          MDP = (S, A, P, R, gamma)
+        </div>
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1rem; font-size: 0.95rem;">
+          <span style="color: var(--accent-cyan); font-weight: 700;">S</span>
+          <span>Set of all possible states</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">A</span>
+          <span>Set of all possible actions</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">P(s'|s,a)</span>
+          <span>Transition probability: likelihood of reaching s' from s via action a</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">R(s,a)</span>
+          <span>Expected reward received after taking action a in state s</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">gamma  in  [0,1)</span>
+          <span>Discount factor: how much future rewards are valued vs immediate ones</span>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The <strong>Markov property</strong> states that the future depends only on the current
+          state, not on the history of how we got there:
+        </p>
+      </div>
+      <div class="formula-box">
+        P(s_{'{'}t+1{'}'} | s_t, a_t, s_{'{'}t-1{'}'}, a_{'{'}t-1{'}'}, ...) = P(s_{'{'}t+1{'}'} | s_t, a_t)
+      </div>
+      <div class="prose">
+        <p>
+          This is what makes MDPs tractable. If the Markov property doesn't hold in the raw
+          environment (e.g. partially observable settings), we must augment the state to make it
+          hold -- for instance, by stacking multiple frames in Atari.
+        </p>
+        <p>
+          The <strong>discount factor gamma</strong> serves two purposes: it keeps the sum of rewards
+          finite in infinite-horizon problems, and it encodes a preference for sooner rewards over
+          later ones. In Tetris we use gamma=0.99, meaning a reward 100 steps away is worth
+          e^{'{'}-100.ln(1/0.99){'}'} ~= 0.37 of its face value.
+        </p>
+        <h3>Return and Value Functions</h3>
+        <p>
+          The <strong>return</strong> G_t from timestep t is the discounted sum of future rewards:
+        </p>
+      </div>
+      <div class="formula-box">
+        G_t = r_{'{'}t+1{'}'} + gamma r_{'{'}t+2{'}'} + gamma2 r_{'{'}t+3{'}'} + ... = ?_{'{'}k=0{'}'}^{'{'}inf{'}'} gamma^k r_{'{'}t+k+1{'}'}
+      </div>
+      <div class="prose">
+        <p>
+          The <strong>state-value function</strong> V^pi(s) gives the expected return starting from
+          state s and following policy pi:
+        </p>
+      </div>
+      <div class="formula-box">
+        V^pi(s) = E_pi [ G_t | s_t = s ] = E_pi [ ?_{'{'}k=0{'}'}^{'{'}inf{'}'} gamma^k r_{'{'}t+k+1{'}'} | s_t = s ]
+      </div>
+      <div class="prose">
+        <p>
+          The <strong>action-value function</strong> Q^pi(s,a) gives the expected return starting
+          from s, taking action a, then following pi:
+        </p>
+      </div>
+      <div class="formula-box">
+        Q^pi(s,a) = E_pi [ G_t | s_t = s, a_t = a ]
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 3: Bellman ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. The Bellman Equations
+      </h2>
+      <div class="prose">
+        <p>
+          Richard Bellman's key insight was that value functions satisfy a recursive relationship.
+          The value of a state is the immediate reward plus the discounted value of the next state.
+          For the <em>optimal</em> value function V*(s):
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1.5rem 0;">
+        <div style="font-size: 1.05rem; text-align: center; margin-bottom: 0.5rem;">Bellman Optimality Equation</div>
+        V*(s) = max_a [ R(s,a) + gamma . ?_{'{'}s'{'}'} P(s'|s,a) . V*(s') ]
+      </div>
+
+      <div class="prose">
+        <p>
+          This equation says: the optimal value of a state is the reward we get from the best
+          action, plus the discounted expected value of the state we end up in.
+        </p>
+        <p>
+          Similarly for the optimal Q-function:
+        </p>
+      </div>
+      <div class="formula-box">
+        Q*(s,a) = R(s,a) + gamma . ?_{'{'}s'{'}'} P(s'|s,a) . max_{'{'}a'{'}'} Q*(s',a')
+      </div>
+
+      <div class="prose">
+        <p>
+          These equations are not just theoretical curiosities -- they define the fixed-point
+          that all Q-learning variants converge to. The key insight: if we knew Q*(s,a) exactly,
+          the optimal policy would simply be:
+        </p>
+      </div>
+      <div class="formula-box">
+        pi*(s) = argmax_a Q*(s,a)
+      </div>
+      <div class="callout callout-info">
+        <strong>Why this matters for Tetris:</strong> In the afterstate DQN, the agent evaluates
+        all 40 possible placements using Q*(afterstate, .) and picks the highest. This is exactly
+        the argmax above, applied after a forward pass of the neural network.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 4: Q-Learning ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. Q-Learning
+      </h2>
+      <div class="prose">
+        <p>
+          Q-learning (Watkins, 1989) is a <strong>model-free, off-policy</strong> algorithm that
+          directly estimates Q*(s,a) without needing to know the transition probabilities P(s'|s,a).
+          The update rule is derived from the Bellman equation by treating it as a regression target:
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1.5rem 0;">
+        <div style="text-align: center; margin-bottom: 0.5rem; font-size: 1.05rem;">Q-Learning Update Rule</div>
+        Q(s,a) &lt;- Q(s,a) + alpha . [ r + gamma . max_{'{'}a'{'}'} Q(s',a') - Q(s,a) ]
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.9rem;">
+          <span style="color: var(--accent-orange);">alpha</span><span>Learning rate (step size)</span>
+          <span style="color: var(--accent-orange);">r</span><span>Observed reward</span>
+          <span style="color: var(--accent-orange);">gamma</span><span>Discount factor</span>
+          <span style="color: var(--accent-orange);">max_{'{'}a'{'}'} Q(s',a')</span><span>Bootstrap estimate of future value</span>
+          <span style="color: var(--accent-orange);">[r + gamma max Q - Q(s,a)]</span><span>TD error (temporal difference error)</span>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The bracketed term is called the <strong>TD error</strong> (temporal difference error) --
+          the difference between the current estimate Q(s,a) and the one-step bootstrapped target
+          r + gamma max Q(s',.). The update nudges Q(s,a) toward the target by a fraction alpha.
+        </p>
+        <p>
+          Q-learning has a remarkable convergence guarantee: given sufficient exploration and
+          a decaying learning rate, it converges to Q* for any finite MDP. This guarantee breaks
+          down with function approximation (neural networks), but DQN introduces tricks to restore
+          stability.
+        </p>
+        <h3>Tabular Q-Learning Example</h3>
+        <p>
+          For small discrete state spaces, Q-values are stored in a table. Here is a minimal
+          Python implementation:
+        </p>
+      </div>
+
+      <pre><code class="language-python">import numpy as np
+
+class QLearningAgent:
+    def __init__(self, n_states, n_actions, alpha=0.1, gamma=0.99, epsilon=1.0):
+        self.Q = np.zeros((n_states, n_actions))  # Q-table
+        self.alpha   = alpha    # learning rate
+        self.gamma   = gamma    # discount factor
+        self.epsilon = epsilon  # exploration rate
+
+    def select_action(self, state):
+        """Epsilon-greedy action selection."""
+        if np.random.rand() < self.epsilon:
+            return np.random.randint(self.Q.shape[1])   # explore
+        return np.argmax(self.Q[state])                  # exploit
+
+    def update(self, state, action, reward, next_state, done):
+        """One Q-learning update step."""
+        current_q = self.Q[state, action]
+
+        if done:
+            target = reward                              # terminal: no future
+        else:
+            target = reward + self.gamma * np.max(self.Q[next_state])
+
+        td_error = target - current_q
+        self.Q[state, action] += self.alpha * td_error
+
+    def decay_epsilon(self, min_eps=0.01, decay=0.995):
+        self.epsilon = max(min_eps, self.epsilon * decay)
+
+
+# --- Training loop ---
+agent = QLearningAgent(n_states=500, n_actions=6)
+
+for episode in range(10_000):
+    state = env.reset()
+    done  = False
+
+    while not done:
+        action            = agent.select_action(state)
+        next_state, r, done, _ = env.step(action)
+        agent.update(state, action, r, next_state, done)
+        state             = next_state
+
+    agent.decay_epsilon()
+</code></pre>
+
+      <div class="prose">
+        <p>
+          This works perfectly for environments like FrozenLake (16 states) but breaks for Tetris,
+          which has roughly 10^30 possible board states. We need function approximation.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 5: Value vs Policy ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. Value-Based vs Policy-Based Methods
+      </h2>
+      <div class="prose">
+        <p>
+          There are two fundamental ways to build an RL agent:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-blue);">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.8rem;">Value-Based</h3>
+          <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 0.8rem;">
+            Learn V(s) or Q(s,a). The policy is implicit: always pick argmax_a Q(s,a).
+          </p>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Q-Learning, SARSA</li>
+            <li>DQN, Dueling DQN, Rainbow</li>
+            <li>Works well for discrete action spaces</li>
+            <li>Deterministic policy (usually)</li>
+          </ul>
+          <div style="margin-top: 0.8rem; color: var(--accent-blue); font-size: 0.85rem; font-weight: 600;">
+            Used in: Tetris DQN project
+          </div>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">Policy-Based</h3>
+          <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 0.8rem;">
+            Learn pi(a|s) directly. Optimise policy parameters by gradient ascent on expected return.
+          </p>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>REINFORCE, PPO, A3C</li>
+            <li>AlphaZero (policy gradient via MCTS)</li>
+            <li>Works for continuous action spaces</li>
+            <li>Stochastic policies -- natural exploration</li>
+          </ul>
+          <div style="margin-top: 0.8rem; color: var(--accent-green); font-size: 0.85rem; font-weight: 600;">
+            Used in: AlphaZero project
+          </div>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          <strong>Actor-Critic</strong> methods combine both: an actor (policy network) and a critic
+          (value network). AlphaZero's dual-headed network (policy + value head) is an actor-critic
+          architecture, trained via the policy improvement signal from MCTS rather than classical
+          policy gradients.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 6: DQN ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. Deep Q-Networks (DQN)
+      </h2>
+      <div class="prose">
+        <p>
+          DQN (Mnih et al., DeepMind 2015) replaces the Q-table with a neural network Q(s,a;theta).
+          Given a state s, the network outputs a Q-value for every action simultaneously. Training
+          minimises the loss:
+        </p>
+      </div>
+      <div class="formula-box">
+        L(theta) = E[(r + gamma . max_{'{'}a'{'}'} Q(s',a'; theta?) - Q(s,a; theta))2]
+      </div>
+      <div class="prose">
+        <p>
+          Where theta? are the parameters of the <strong>target network</strong> -- a periodically
+          frozen copy of the online network. Three key innovations made DQN work:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.6rem;">Experience Replay</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Store transitions (s,a,r,s') in a replay buffer. Sample random mini-batches to train.
+            This breaks temporal correlations, improves data efficiency, and stabilises learning.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <h4 style="color: var(--accent-purple); margin-bottom: 0.6rem;">Target Network</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            A frozen copy of the Q-network provides stable regression targets. Without it, the
+            target moves every update -- like chasing a moving goal. Synced every N steps.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.6rem;">Epsilon-Greedy Exploration</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Take a random action with probability epsilon (decaying from 1.0 to 0.01). Ensures the agent
+            explores enough early in training before exploiting its learned policy.
+          </p>
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.3rem; color: var(--text-primary); margin: 1.5rem 0 0.8rem;">DQN Training Step -- Python Pseudocode</h3>
+      <pre><code class="language-python">import torch
+import torch.nn as nn
+import random
+from collections import deque
+
+class DQN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class DQNAgent:
+    def __init__(self, state_dim, action_dim):
+        self.online_net = DQN(state_dim, 512, action_dim)
+        self.target_net = DQN(state_dim, 512, action_dim)
+        self.target_net.load_state_dict(self.online_net.state_dict())
+
+        self.replay_buffer = deque(maxlen=100_000)
+        self.optimizer  = torch.optim.Adam(self.online_net.parameters(), lr=1e-4)
+        self.loss_fn    = nn.SmoothL1Loss()  # Huber loss
+
+        self.gamma      = 0.99
+        self.batch_size = 512
+        self.target_sync = 2000   # steps between target net sync
+        self.step_count  = 0
+
+    def store(self, state, action, reward, next_state, done):
+        self.replay_buffer.append((state, action, reward, next_state, done))
+
+    def train_step(self):
+        if len(self.replay_buffer) < self.batch_size:
+            return None
+
+        # Sample random mini-batch from replay buffer
+        batch = random.sample(self.replay_buffer, self.batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+
+        states      = torch.tensor(states,      dtype=torch.float32)
+        actions     = torch.tensor(actions,     dtype=torch.long).unsqueeze(1)
+        rewards     = torch.tensor(rewards,     dtype=torch.float32)
+        next_states = torch.tensor(next_states, dtype=torch.float32)
+        dones       = torch.tensor(dones,       dtype=torch.float32)
+
+        # Current Q-values for taken actions
+        current_q = self.online_net(states).gather(1, actions).squeeze(1)
+
+        # Target Q-values: r + gamma * max_a' Q_target(s', a')
+        with torch.no_grad():
+            max_next_q = self.target_net(next_states).max(dim=1)[0]
+            target_q   = rewards + self.gamma * max_next_q * (1 - dones)
+
+        loss = self.loss_fn(current_q, target_q)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.online_net.parameters(), 10.0)
+        self.optimizer.step()
+
+        # Periodically sync target network
+        self.step_count += 1
+        if self.step_count % self.target_sync == 0:
+            self.target_net.load_state_dict(self.online_net.state_dict())
+
+        return loss.item()
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 7: Connection to Projects ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        7. How This Connects to Both Projects
+      </h2>
+      <div class="prose">
+        <p>
+          Both projects on this site use RL, but in fundamentally different ways that illustrate
+          the breadth of the field:
+        </p>
+      </div>
+
+      <div style="overflow-x: auto; margin-top: 1.2rem;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="text-align: left; padding: 0.75rem 1rem; border: 1px solid var(--border);">Aspect</th>
+              <th style="text-align: left; padding: 0.75rem 1rem; border: 1px solid var(--border); color: var(--accent-blue);">Tetris DQN</th>
+              <th style="text-align: left; padding: 0.75rem 1rem; border: 1px solid var(--border); color: var(--accent-green);">AlphaZero</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Algorithm family</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Value-based (DQN)</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Policy-based + Value (Actor-Critic via MCTS)</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Learning signal</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Dense shaped rewards</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Sparse game outcome (win/loss/draw)</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Model use</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Model-free (no simulator in loop)</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Model-based (game simulator for MCTS)</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Exploration</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">epsilon-greedy (decaying)</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Dirichlet noise + visit-count UCT</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">State representation</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">40 handcrafted features</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">3-channel board encoding</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Best result</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">22,645 lines cleared</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">82.5% win rate vs random</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-success" style="margin-top: 1.8rem;">
+        <strong>Key takeaway:</strong> DQN is excellent when you can shape a rich reward signal
+        and want fast online learning. AlphaZero is powerful when you have a perfect simulator
+        and want the agent to discover everything from self-play alone -- but requires many more
+        samples and compute.
+      </div>
+    </section>
+
+    <!-- Further reading -->
+    <section>
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        8. Further Reading
+      </h2>
+      <div class="prose">
+        <ul>
+          <li>Sutton &amp; Barto -- <em>Reinforcement Learning: An Introduction</em> (2nd ed., free online) -- the definitive textbook</li>
+          <li>Mnih et al. (2015) -- <em>Human-level control through deep reinforcement learning</em> -- the original DQN paper</li>
+          <li>Silver et al. (2017) -- <em>Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm</em> -- AlphaZero</li>
+          <li>Van Hasselt et al. (2016) -- <em>Deep Reinforcement Learning with Double Q-learning</em></li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem;">
+        <a href={`${base}background/mcts/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--accent-blue); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Next: MCTS &amp; AlphaZero ->
+        </a>
+        <a href={`${base}tetris/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Tetris DQN Project
+        </a>
+      </div>
+    </section>
+
+  </div>
+</Layout>

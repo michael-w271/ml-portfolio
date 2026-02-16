@@ -1,0 +1,512 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Monte Carlo Tree Search & AlphaZero" description="Deep dive into MCTS, the UCT and PUCT formulas, and how AlphaZero replaces random rollouts with a learned neural network for superhuman game play.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-green">Theory</span>
+        <span class="tag tag-purple">MCTS</span>
+        <span class="tag tag-blue">AlphaZero</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        Monte Carlo Tree Search &amp; AlphaZero
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        How a simple simulation strategy combined with a neural network guidance signal achieves
+        superhuman performance on perfect-information games.
+      </p>
+    </div>
+
+    <div class="callout callout-info" style="margin-bottom: 2.5rem;">
+      <strong>Background page.</strong> For the concrete AlphaZero Connect Four implementation,
+      see <a href={`${base}alphazero/`} style="color: var(--accent-blue);">AlphaZero Overview</a>
+      and its sub-pages.
+    </div>
+
+    <!-- ===================== SECTION 1: What is MCTS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. What Is Monte Carlo Tree Search?
+      </h2>
+      <div class="prose">
+        <p>
+          Monte Carlo Tree Search (MCTS) is a best-first search algorithm that uses random
+          simulations (rollouts) to estimate the value of game positions. It builds a search tree
+          incrementally, focusing computation on the most promising lines of play.
+        </p>
+        <p>
+          The key idea is the <strong>exploration-exploitation tradeoff</strong>: should the search
+          explore new, unknown branches, or exploit known good branches? MCTS solves this elegantly
+          with the UCT formula. Over thousands of iterations, the tree converges to the minimax
+          optimal play.
+        </p>
+        <p>
+          MCTS requires <em>only a game simulator</em> -- no expert knowledge, no handcrafted
+          heuristics, no opening books. This generality is what makes it powerful.
+        </p>
+      </div>
+
+      <!-- Tree diagram -->
+      <pre style="margin: 1.5rem 0; font-size: 0.82rem; line-height: 1.5;"><code>MCTS Tree after several iterations:
+
+                    +-------------+
+                    |  Root Node  | N=100, V=0.62
+                    +------+------+
+              +-------------+-------------+
+       +------+------+ +----+----+  +-----+------+
+       |   Action 0  | |Action 1 |  |  Action 2  |
+       |  N=55, V=0.7| |N=35,V=.5|  | N=10, V=.4 |
+       +------+------+ +----+----+  +-----+------+
+    +----+----+         +---+---+         | (less explored)
+  [A00][A01][A02]     [A10] [A11]        [A20]
+  N=30  N=20 N=5      N=25  N=10         N=10
+
+  &lt;- heavily explored ->    &lt;- moderate ->   &lt;- frontier
+
+N = visit count, V = estimated win rate
+UCT drives the search: high V (exploit) + low N (explore)</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 2: Four Phases ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. The Four Phases of MCTS
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.2rem; margin-bottom: 1.8rem;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-blue);">
+          <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-blue); letter-spacing: 0.05em; margin-bottom: 0.5rem;">PHASE 1</div>
+          <h3 style="color: var(--text-primary); margin-bottom: 0.6rem;">Selection</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Starting at the root, traverse the tree by repeatedly selecting the child that
+            maximises the UCT score, until reaching a leaf node.
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-green); letter-spacing: 0.05em; margin-bottom: 0.5rem;">PHASE 2</div>
+          <h3 style="color: var(--text-primary); margin-bottom: 0.6rem;">Expansion</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            If the leaf node is not terminal, add one or more child nodes by trying unvisited
+            actions from the current state.
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-orange); letter-spacing: 0.05em; margin-bottom: 0.5rem;">PHASE 3</div>
+          <h3 style="color: var(--text-primary); margin-bottom: 0.6rem;">Simulation / Evaluation</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Classic MCTS: play random moves until a terminal state. AlphaZero: call the neural
+            network to get a value estimate V(s) directly (no rollout needed).
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-purple);">
+          <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-purple); letter-spacing: 0.05em; margin-bottom: 0.5rem;">PHASE 4</div>
+          <h3 style="color: var(--text-primary); margin-bottom: 0.6rem;">Backpropagation</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Propagate the result back up the tree, updating visit counts N and value sums for
+            every node on the path from leaf to root.
+          </p>
+        </div>
+      </div>
+
+      <pre><code class="language-python">def mcts_search(root_state, network, n_simulations=800):
+    root = Node(state=root_state)
+    root.expand(network)  # initialize priors with neural net
+
+    for _ in range(n_simulations):
+        # --- Phase 1: Selection ---
+        node = root
+        path = [node]
+        while node.is_fully_expanded() and not node.is_terminal():
+            node = node.select_child_uct()   # UCT / PUCT formula
+            path.append(node)
+
+        # --- Phase 2: Expansion ---
+        if not node.is_terminal():
+            node.expand(network)             # add children, get priors from net
+
+        # --- Phase 3: Evaluation ---
+        if node.is_terminal():
+            value = node.terminal_value()
+        else:
+            value = network.value(node.state) # neural net replaces rollout
+
+        # --- Phase 4: Backpropagation ---
+        for n in reversed(path):
+            n.visit_count  += 1
+            n.value_sum    += value
+            value           = -value  # flip perspective for opponent nodes
+
+    # Final action: proportional to visit counts
+    visit_counts = [child.visit_count for child in root.children]
+    return visit_counts   # caller samples or takes argmax
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 3: UCT Formula ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. The UCT Formula
+      </h2>
+      <div class="prose">
+        <p>
+          UCT (Upper Confidence Bound for Trees, Kocsis &amp; Szepesvari 2006) provides a
+          mathematically principled way to balance exploration and exploitation:
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1.5rem 0;">
+        <div style="text-align: center; font-size: 1.1rem; margin-bottom: 0.8rem;">UCT Formula</div>
+        UCT(s, a) = Q(s,a) + C . sqrt( ln(N(s)) / N(s,a) )
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.9rem;">
+          <span style="color: var(--accent-cyan); font-weight: 700;">Q(s,a)</span>
+          <span>Average value of state-action (s,a) -- exploitation term</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">N(s)</span>
+          <span>Visit count of parent node s</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">N(s,a)</span>
+          <span>Visit count of child node reached by action a</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">C</span>
+          <span>Exploration constant (typically sqrt2 for UCT, 1-2 for games)</span>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The <strong>exploitation term</strong> Q(s,a) favours actions with high historical value.
+          The <strong>exploration term</strong> C.sqrt(ln N(s)/N(s,a)) grows larger the fewer times
+          an action has been visited, encouraging exploration of untried lines.
+        </p>
+        <p>
+          UCT is derived from the UCB1 bandit algorithm and has a theoretical regret bound of
+          O(sqrt(K.ln n)) for K arms. In practice, a tuned C value is critical for performance.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 4: PUCT Formula ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. PUCT -- The AlphaZero Formula
+      </h2>
+      <div class="prose">
+        <p>
+          AlphaZero replaces the pure exploration bonus with a <strong>prior probability</strong>
+          P(s,a) from the policy head of the neural network. This is the PUCT (Polynomial UCT)
+          formula:
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1.5rem 0;">
+        <div style="text-align: center; font-size: 1.1rem; margin-bottom: 0.8rem;">PUCT Formula (AlphaZero)</div>
+        PUCT(s, a) = Q(s,a) + C . P(s,a) . sqrtN(s) / (1 + N(s,a))
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.9rem;">
+          <span style="color: var(--accent-cyan); font-weight: 700;">P(s,a)</span>
+          <span>Prior probability from the policy network -- acts as intelligent exploration guidance</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">sqrtN(s)</span>
+          <span>Square root (polynomial) rather than log -- empirically better for games</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">1 + N(s,a)</span>
+          <span>+1 prevents division by zero on unexplored actions; also reduces prior influence as N grows</span>
+          <span style="color: var(--accent-cyan); font-weight: 700;">C = 2</span>
+          <span>Exploration constant used in the Connect Four implementation</span>
+        </div>
+      </div>
+
+      <div class="callout callout-success">
+        <strong>Why PUCT is more efficient than UCT:</strong> The prior P(s,a) biases exploration
+        toward moves the neural network already believes are good. A rookie MCTS explores all actions
+        equally; AlphaZero focuses on the top-2 or 3 candidates immediately. This dramatically
+        reduces the number of simulations needed for strong play.
+      </div>
+
+      <div class="prose" style="margin-top: 1.5rem;">
+        <p>
+          As N(s,a) grows, the prior P(s,a) term diminishes relative to Q(s,a). The search
+          asymptotically converges on the node with the highest true value, regardless of the
+          (possibly inaccurate) initial prior. The prior matters most in the early simulations.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 5: Neural Network Replaces Rollouts ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. How the Neural Network Replaces Rollouts
+      </h2>
+      <div class="prose">
+        <p>
+          Classic MCTS estimates node value by playing random games (rollouts) from that position.
+          This is unbiased but noisy -- it takes many rollouts to get a reliable estimate of a
+          position's value.
+        </p>
+        <p>
+          AlphaZero replaces the rollout entirely with a neural network call:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <h3 style="color: var(--accent-orange); margin-bottom: 0.8rem;">Classic MCTS Rollout</h3>
+          <pre style="font-size: 0.8rem; background: var(--bg-primary); padding: 0.8rem; border-radius: 4px;"><code>def rollout(state):
+    while not state.is_terminal():
+        action = random.choice(
+            state.legal_actions()
+        )
+        state = state.apply(action)
+    return state.terminal_value()
+# Needs 1000s of random games
+# to converge on a good estimate</code></pre>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">AlphaZero Evaluation</h3>
+          <pre style="font-size: 0.8rem; background: var(--bg-primary); padding: 0.8rem; border-radius: 4px;"><code>def evaluate(state, network):
+    # Single forward pass
+    policy, value = network(
+        encode_board(state)
+    )
+    # policy: prior over moves
+    # value: win probability [-1,1]
+    return policy, value
+# One forward pass per node
+# Much more accurate, much faster</code></pre>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The network returns two outputs for each state:
+        </p>
+        <ul>
+          <li><strong>Policy vector P(s,.)</strong>: probability distribution over all legal moves. Used as the PUCT prior.</li>
+          <li><strong>Value scalar V(s)</strong>: estimated win probability from -1 (loss) to +1 (win) from the current player's perspective.</li>
+        </ul>
+        <p>
+          Early in training, the network is random so P(s,a) ~= uniform and V(s) ~= 0. The MCTS
+          tree still provides useful signal through its tree structure. As training progresses,
+          the network becomes a dramatically better guide.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 6: AlphaZero Self-Play Loop ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. The AlphaZero Self-Play Training Loop
+      </h2>
+      <div class="prose">
+        <p>
+          AlphaZero trains by playing against itself, generating its own training data, and
+          iterating. There is no human data, no domain-specific heuristics, no opening books.
+        </p>
+      </div>
+
+      <pre style="margin: 1.2rem 0;"><code>+---------------------------------------------------------------------+
+|                   AlphaZero Training Loop                           |
+|                                                                     |
+|  +---------------------------------------------------------------+  |
+|  |  ITERATION  (repeat for N iterations)                        |  |
+|  |                                                               |  |
+|  |  Step 1 -- SELF-PLAY                                         |  |
+|  |    For each game:                                             |  |
+|  |      For each move:                                           |  |
+|  |        Run 800 MCTS simulations using current network        |  |
+|  |        pi &lt;- visit count distribution (temperature tau)          |  |
+|  |        a &lt;- sample from pi                                     |  |
+|  |        Store (state, pi, ?)  &lt;- ? filled in after game ends    |  |
+|  |      At game end: fill ? with outcome z  in  {'{'}-1, 0, +1{'}'}       |  |
+|  |                                                               |  |
+|  |  Step 2 -- TRAIN NETWORK on (state, pi, z) tuples             |  |
+|  |    L = CrossEntropy(out_policy, pi)                            |  |
+|  |        + MSE(out_value, z)                                    |  |
+|  |                                                               |  |
+|  |  Step 3 -- EVALUATE (every 5 iterations)                     |  |
+|  |    Play new network vs random opponent                        |  |
+|  |    Track win rate                                             |  |
+|  +---------------------------------------------------------------+  |
++---------------------------------------------------------------------+</code></pre>
+
+      <div class="prose">
+        <p>
+          This is <strong>expert iteration</strong>: MCTS acts as a "policy improvement operator" --
+          its output pi is always at least as good as the raw network policy, because it does
+          lookahead search. Training the network to predict pi (rather than just taking greedy
+          actions) allows the network to learn from the MCTS's lookahead.
+        </p>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Expert Iteration intuition:</strong> Imagine a chess player who studies their own
+        games. Each game, they use a chess engine (MCTS) to analyse each position and find better
+        moves. Then they practise to internalise those moves. Over many iterations, they no longer
+        need the engine -- they've learned its insights. This is exactly how AlphaZero learns.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 7: Dirichlet Noise ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        7. Dirichlet Noise for Exploration
+      </h2>
+      <div class="prose">
+        <p>
+          A problem during self-play: if the network strongly prefers one action, the MCTS will
+          almost always explore that same branch. The agent gets stuck in a local optimum and
+          never discovers better strategies.
+        </p>
+        <p>
+          The fix is to add <strong>Dirichlet noise</strong> to the root node's priors at the
+          start of each MCTS search:
+        </p>
+      </div>
+
+      <div class="formula-box">
+        P~(s_root, a) = (1 - epsilon) . P(s_root, a) + epsilon . ?_a
+        <div style="margin-top: 0.8rem; font-size: 0.9rem;">
+          where ? ~ Dir(alpha),  alpha = 0.3,  epsilon = 0.25
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The Dirichlet distribution Dir(alpha) produces a random probability vector. With alpha=0.3
+          (sparse), the noise places most of its mass on a few random moves. With epsilon=0.25, the
+          noise is blended with 75% of the original neural network policy.
+        </p>
+        <p>
+          This ensures that every move gets at least some exploration probability, even if the
+          network has learned to ignore it. Dirichlet noise is <em>only applied at the root</em>
+          during self-play -- not during evaluation games where we want deterministic play.
+        </p>
+      </div>
+
+      <pre><code class="language-python">import numpy as np
+
+def add_dirichlet_noise(root, alpha=0.3, epsilon=0.25):
+    """Add exploration noise to root node priors (self-play only)."""
+    n_actions  = len(root.children)
+    noise      = np.random.dirichlet([alpha] * n_actions)
+
+    for i, (action, child) in enumerate(root.children.items()):
+        child.prior = (1 - epsilon) * child.prior + epsilon * noise[i]
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 8: Temperature ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        8. Temperature Parameter for Move Selection
+      </h2>
+      <div class="prose">
+        <p>
+          After MCTS completes, the move to play is sampled from the visit count distribution,
+          controlled by a <strong>temperature</strong> parameter tau:
+        </p>
+      </div>
+
+      <div class="formula-box">
+        pi(a) = N(s,a)^{'{'}1/tau{'}'} / ?_{'{'}b{'}'} N(s,b)^{'{'}1/tau{'}'}
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.6rem;">tau = 1 (Self-play)</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Moves sampled proportionally to visit counts. High-entropy exploration ensures the
+            dataset covers diverse positions. Used for the first ~30 moves.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.6rem;">tau -> 0 (Evaluation)</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Deterministic: always pick the most-visited action (argmax). Used when measuring
+            win rate to ensure consistent, strongest play.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 9: Why More Powerful ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        9. Why AlphaZero Beats Pure MCTS and Pure Neural Nets
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.2rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <h3 style="color: var(--accent-orange); margin-bottom: 0.8rem;">Pure MCTS (no network)</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Must do random rollouts to estimate value</li>
+            <li>Noisy estimates need many rollouts</li>
+            <li>No pattern recognition across positions</li>
+            <li>Cannot generalise to unseen positions</li>
+            <li>Scales poorly with branching factor</li>
+          </ul>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-purple);">
+          <h3 style="color: var(--accent-purple); margin-bottom: 0.8rem;">Pure Neural Net (no MCTS)</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Single forward pass, no lookahead</li>
+            <li>Misses tactical threats visible with search</li>
+            <li>Limited by training data quality</li>
+            <li>Needs very large datasets to be strong</li>
+            <li>Overconfident on out-of-distribution states</li>
+          </ul>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">AlphaZero (MCTS + Network)</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem;">
+            <li>Network guides search toward good moves</li>
+            <li>MCTS provides lookahead and tactical precision</li>
+            <li>Virtuous cycle: better network -> better MCTS data -> better network</li>
+            <li>More simulations = stronger play (compute scales)</li>
+            <li>Generalises via learned representations</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The combination is synergistic: MCTS makes the network stronger by providing better move
+          targets (pi vs raw policy), and the network makes MCTS more efficient by providing
+          accurate value estimates and focused priors. Neither alone achieves what the combination does.
+        </p>
+      </div>
+
+      <div class="callout callout-success">
+        <strong>Scaling law:</strong> AlphaZero's strength scales predictably with compute. Doubling
+        the number of MCTS simulations consistently improves play strength. This is a remarkable
+        property: the algorithm has no hard ceiling -- it gets stronger with more compute, indefinitely.
+      </div>
+    </section>
+
+    <!-- Further reading -->
+    <section>
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        10. Further Reading
+      </h2>
+      <div class="prose">
+        <ul>
+          <li>Silver et al. (2017) -- <em>Mastering the game of Go without human knowledge</em> (AlphaGo Zero)</li>
+          <li>Silver et al. (2018) -- <em>A general reinforcement learning algorithm that masters Chess, Shogi and Go</em> (AlphaZero)</li>
+          <li>Kocsis &amp; Szepesvari (2006) -- <em>Bandit based Monte-Carlo planning</em> -- UCT paper</li>
+          <li>Anthony, Tian, Barber (2017) -- <em>Thinking Fast and Slow with Deep Learning and Tree Search</em> -- expert iteration</li>
+          <li>Browne et al. (2012) -- <em>A Survey of Monte Carlo Tree Search Methods</em></li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem;">
+        <a href={`${base}alphazero/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--accent-green); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          AlphaZero Project ->
+        </a>
+        <a href={`${base}background/rl/`}
+           style="display: inline-block; padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+          &lt;- RL Fundamentals
+        </a>
+      </div>
+    </section>
+
+  </div>
+</Layout>

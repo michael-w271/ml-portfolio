@@ -1,0 +1,530 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="How to Train -- Quickstart Guide" description="Step-by-step guide to training the Tetris DQN (C++/LibTorch/CMake) and AlphaZero (Python/PyTorch) projects, including prerequisites, config tuning, monitoring, and troubleshooting.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-green">Guide</span>
+        <span class="tag tag-blue">Quickstart</span>
+        <span class="tag tag-orange">CUDA</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        How to Train -- Quickstart
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        Everything you need to clone, build, and train both projects from scratch -- plus tips
+        for faster training and common pitfalls to avoid.
+      </p>
+    </div>
+
+    <!-- ===================== PREREQUISITES ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Prerequisites
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <div style="font-weight: 700; color: var(--accent-green); margin-bottom: 0.4rem;">CUDA Toolkit 12.x</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Required for GPU training. CUDA 12.1+ recommended. Verify: <code>nvcc --version</code></p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.4rem;">CMake 3.18+</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Required for Tetris DQN build. Verify: <code>cmake --version</code></p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <div style="font-weight: 700; color: var(--accent-orange); margin-bottom: 0.4rem;">LibTorch 2.7 (CUDA)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Download from pytorch.org -> "C++ / Java" -> CUDA build. Extract to <code>~/libtorch</code></p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <div style="font-weight: 700; color: var(--accent-purple); margin-bottom: 0.4rem;">SDL2</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">For Tetris visualisation. Linux: <code>apt install libsdl2-dev</code>. Mac: <code>brew install sdl2</code></p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-cyan);">
+          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.4rem;">Conda / Python 3.10+</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Required for AlphaZero. Miniconda recommended. Verify: <code>conda --version</code></p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <div style="font-weight: 700; color: var(--accent-blue); margin-bottom: 0.4rem;">Node.js 18+ (optional)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">For the React monitoring dashboard. <code>npm --version</code> to check.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>GPU strongly recommended</strong> but not required. CPU training works for AlphaZero
+        on Connect Four (expect ~2x slower) and Tetris DQN (expect ~7x slower due to forward pass
+        batching overhead).
+      </div>
+    </section>
+
+    <!-- ===================== TETRIS DQN ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Section 1: Train the Tetris DQN
+      </h2>
+
+      <!-- Step 1: Clone -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">1</span>
+          Clone the Repository
+        </h3>
+        <pre><code class="language-bash">git clone https://github.com/yourusername/tetris-dqn.git
+cd tetris-dqn
+ls
+# CMakeLists.txt  src/  include/  configs/  dashboard/</code></pre>
+      </div>
+
+      <!-- Step 2: Build -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">2</span>
+          Build with CMake
+        </h3>
+        <pre><code class="language-bash"># Create build directory
+mkdir build && cd build
+
+# Configure -- point to your LibTorch installation
+cmake .. \
+    -DCMAKE_PREFIX_PATH="$HOME/libtorch" \
+    -DCMAKE_BUILD_TYPE=Release
+
+# Build (use -j$(nproc) to use all CPU cores)
+make -j$(nproc)
+
+# Verify: you should see
+ls bin/
+# train  evaluate  visualise</code></pre>
+
+        <div class="callout callout-info" style="margin-top: 0.8rem;">
+          <strong>CMake can't find LibTorch?</strong> Make sure you downloaded the CUDA-enabled
+          version from pytorch.org (not the CPU-only version). The path should contain
+          <code>libtorch/share/cmake/Torch/TorchConfig.cmake</code>.
+        </div>
+      </div>
+
+      <!-- Step 3: Configure -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">3</span>
+          Configure Training Parameters
+        </h3>
+        <p style="color: var(--text-secondary); margin-bottom: 0.8rem; font-size: 0.9rem;">Edit <code>configs/training_params.json</code>:</p>
+        <pre><code class="language-json">&#123;
+  "learning_rate":    0.0001,
+  "gamma":            0.99,
+  "batch_size":       512,
+  "replay_capacity":  100000,
+  "target_sync":      2000,
+  "epsilon_start":    1.0,
+  "epsilon_end":      0.01,
+  "epsilon_decay":    200000,
+  "hidden_size":      128,
+  "grad_clip":        10.0,
+  "warm_up_steps":    10000,
+  "max_episodes":     500000,
+  "save_interval":    10000,
+  "penalty_holes":    -4.0,
+  "penalty_bumpiness": -0.1,
+  "penalty_height":   -0.1,
+  "penalty_game_over": -100.0,
+  "reward_lines":     [0, 10, 30, 60, 100]
+&#125;</code></pre>
+      </div>
+
+      <!-- Step 4: Run training -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">4</span>
+          Start Training
+        </h3>
+        <pre><code class="language-bash"># Train (headless -- no SDL window)
+./bin/train --config ../configs/training_params.json
+
+# Train with visual rendering (SDL2 window)
+./bin/train --config ../configs/training_params.json --render
+
+# Resume from checkpoint
+./bin/train --config ../configs/training_params.json \
+            --resume checkpoints/model_ep100000.pt
+
+# Training output (stdout):
+# Episode 100  | Lines: 42  | Reward: -8.3  | Epsilon: 0.99 | Loss: 2.14
+# Episode 200  | Lines: 68  | Reward: -4.1  | Epsilon: 0.98 | Loss: 1.87
+# ...</code></pre>
+      </div>
+
+      <!-- Step 5: Monitor -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">5</span>
+          Monitor with the Dashboard
+        </h3>
+        <pre><code class="language-bash"># In a separate terminal:
+cd dashboard
+npm install
+npm run dev
+
+# Open http://localhost:5173 in your browser
+# The dashboard reads metrics.jsonl in real-time and updates charts automatically.
+# Charts available:
+#   - Lines per episode (100-episode rolling average)
+#   - Huber loss (per training step)
+#   - Q-value mean and std
+#   - Epsilon decay curve
+#   - Reward distribution</code></pre>
+      </div>
+
+      <!-- Step 6: Evaluate -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">6</span>
+          Evaluate a Trained Model
+        </h3>
+        <pre><code class="language-bash"># Run 100 evaluation games (no epsilon, greedy policy)
+./bin/evaluate --model checkpoints/best_model.pt --episodes 100
+
+# Output:
+# Evaluating checkpoints/best_model.pt over 100 episodes...
+# Mean lines:  8,341.2
+# Median:      7,203.0
+# Best run:    22,645
+# Std dev:     4,102.3
+
+# Watch a game with rendering:
+./bin/visualise --model checkpoints/best_model.pt</code></pre>
+      </div>
+
+      <!-- Key params to tune -->
+      <div>
+        <h3 style="font-size: 1.2rem; color: var(--text-primary); margin-bottom: 0.8rem;">Key Parameters to Tune</h3>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+            <thead>
+              <tr style="background: var(--bg-secondary);">
+                <th style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Parameter</th>
+                <th style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Effect of increasing</th>
+                <th style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Effect of decreasing</th>
+                <th style="padding: 0.6rem 1rem; border: 1px solid var(--border);">Start here</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.5rem 1rem;border:1px solid var(--border);font-family:monospace;">hidden_size</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">More capacity (may overfit)</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Faster, may underfit</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">128</td></tr>
+              <tr style="background:var(--bg-secondary)"><td style="padding:0.5rem 1rem;border:1px solid var(--border);font-family:monospace;">penalty_holes</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Very flat boards, conservative play</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">More holes tolerated</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">-4.0</td></tr>
+              <tr><td style="padding:0.5rem 1rem;border:1px solid var(--border);font-family:monospace;">epsilon_decay</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">More exploration, slower learning</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Premature convergence</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">200,000</td></tr>
+              <tr style="background:var(--bg-secondary)"><td style="padding:0.5rem 1rem;border:1px solid var(--border);font-family:monospace;">batch_size</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Smoother gradients, more VRAM</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Noisier but faster updates</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">512</td></tr>
+              <tr><td style="padding:0.5rem 1rem;border:1px solid var(--border);font-family:monospace;">target_sync</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">More stable but slower adaptation</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">Unstable training</td><td style="padding:0.5rem 1rem;border:1px solid var(--border);">2,000</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ALPHAZERO ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Section 2: Train AlphaZero
+      </h2>
+
+      <!-- Step 1: Clone -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">1</span>
+          Clone the Repository
+        </h3>
+        <pre><code class="language-bash">git clone https://github.com/yourusername/alphazero-connect4.git
+cd alphazero-connect4
+ls
+# alphazero.py  games/  model.py  mcts.py  train.py  evaluate.py  requirements.txt</code></pre>
+      </div>
+
+      <!-- Step 2: Environment -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">2</span>
+          Set Up conda Environment
+        </h3>
+        <pre><code class="language-bash"># Create and activate environment
+conda create -n alphazero python=3.10 -y
+conda activate alphazero
+
+# Install PyTorch with CUDA 12.1
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 \
+    -c pytorch -c nvidia -y
+
+# Install other dependencies
+pip install -r requirements.txt
+# Requirements: numpy tqdm matplotlib
+
+# Verify GPU is available
+python -c "import torch; print(torch.cuda.is_available())"
+# True</code></pre>
+      </div>
+
+      <!-- Step 3: Run training -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">3</span>
+          Start Training
+        </h3>
+        <pre><code class="language-bash"># Train Connect Four (default: 50 iterations, 4 res blocks, 64 hidden)
+python train.py --game connect4
+
+# Train with custom config
+python train.py \
+    --game connect4 \
+    --num_iterations 100 \
+    --num_res_blocks 9 \
+    --num_hidden 128 \
+    --num_searches 400 \
+    --num_self_play_games 500 \
+    --batch_size 256 \
+    --temperature 1.0 \
+    --dirichlet_alpha 0.3 \
+    --dirichlet_epsilon 0.25
+
+# Train TicTacToe (much faster, good for testing)
+python train.py --game tictactoe --num_iterations 10
+
+# Train Gomoku (slower, heavier network)
+python train.py --game gomoku --num_res_blocks 20 --num_hidden 128
+
+# Training output:
+# Iteration 0/50 [Self-play 500 games...]
+#   Policy loss: 1.943  Value loss: 0.214  Total: 2.157
+# Iteration 5/50 [Self-play 500 games...]
+#   Win rate vs random (100 games): 31.0%
+#   Policy loss: 1.521  Value loss: 0.191  Total: 1.712
+# ...</code></pre>
+      </div>
+
+      <!-- Step 4: Monitor -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">4</span>
+          Monitor Training
+        </h3>
+        <pre><code class="language-bash"># Metrics are logged to training_log.csv
+# Columns: iteration, policy_loss, value_loss, total_loss, win_rate
+
+# Quick summary in terminal:
+python -c "
+import pandas as pd
+df = pd.read_csv('training_log.csv')
+print(df.tail(10).to_string())
+"
+
+# Plot with matplotlib:
+python plot_training.py --log training_log.csv</code></pre>
+      </div>
+
+      <!-- Step 5: Evaluate -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">5</span>
+          Evaluate Against Random Opponent
+        </h3>
+        <pre><code class="language-bash"># Evaluate latest checkpoint vs random opponent (1000 games)
+python evaluate.py \
+    --model checkpoints/model_iter49.pt \
+    --game connect4 \
+    --n_games 1000 \
+    --num_searches 400
+
+# Output:
+# Evaluating model_iter49.pt...
+# Games played: 1000
+# Wins: 825  Draws: 31  Losses: 144
+# Win rate: 82.5%  Draw rate: 3.1%  Loss rate: 14.4%
+
+# Head-to-head: two AlphaZero models
+python evaluate.py \
+    --model1 checkpoints/model_iter49.pt \
+    --model2 checkpoints/model_iter10.pt \
+    --n_games 100</code></pre>
+      </div>
+
+      <!-- Step 6: Play against it -->
+      <div style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1.2rem; color: var(--accent-green); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.6rem;">
+          <span style="background: var(--accent-green); color: white; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">6</span>
+          Play Against the Trained Model
+        </h3>
+        <pre><code class="language-bash">python play.py --model checkpoints/model_iter49.pt --game connect4
+
+# Prints board in terminal:
+# Your turn (you are X, computer is O)
+# Current board:
+#   . . . . . . .
+#   . . . . . . .
+#   . . . O . . .
+#   . . . X O . .
+#   . . X X O . .
+#   . . X O X . .
+# Enter column (0-6): _</code></pre>
+      </div>
+    </section>
+
+    <!-- ===================== TIPS FOR FASTER TRAINING ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Tips for Faster Training
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">Increase batch size</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Larger batches (512->1024 for AlphaZero, 512->2048 for Tetris DQN) improve GPU
+            utilisation at the cost of more VRAM. Speeds up training step per sample.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.5rem;">Reduce MCTS simulations during self-play</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Cut from 50 to 25 simulations per move in early training iterations. The network is
+            weak anyway -- more simulations don't help much and are much slower.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Parallelize self-play games</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Run multiple self-play games simultaneously using Python multiprocessing or
+            threading. Each game is CPU-bound; parallelism helps significantly.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <h4 style="color: var(--accent-purple); margin-bottom: 0.5rem;">Use torch.compile() (PyTorch 2.0+)</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            <code>model = torch.compile(model)</code> before training. Can provide 10-30% speedup
+            on GPU through kernel fusion, especially for the ResNet.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-cyan);">
+          <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">Reduce replay buffer (Tetris)</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            If VRAM is limited, reduce <code>replay_capacity</code> from 100K to 50K. Slightly
+            reduces diversity but cuts memory usage significantly.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">C++ Tetris: compile with -O3</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Set <code>CMAKE_BUILD_TYPE=Release</code> (not Debug). Release mode enables -O3
+            optimization, dramatically speeding up the game simulation loop.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== COMMON PITFALLS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Common Pitfalls &amp; Fixes
+      </h2>
+
+      <div style="display: grid; gap: 1.2rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Q-value explosion (Tetris DQN)</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Symptom:</strong> Q-values grow unboundedly (e.g., 10^6) and loss becomes NaN.<br />
+            <strong>Cause:</strong> Learning rate too high, gradient clipping too loose, or target sync too infrequent.<br />
+            <strong>Fix:</strong> Reduce <code>learning_rate</code> by 10x, reduce <code>grad_clip</code> from 10 to 1,
+            and reduce <code>target_sync</code> from 2000 to 500.
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Mode collapse (AlphaZero)</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Symptom:</strong> The agent always plays the same move regardless of board state.
+            Policy entropy collapses to near 0.<br />
+            <strong>Cause:</strong> Dirichlet noise not applied, or <code>dirichlet_epsilon</code> is too low.<br />
+            <strong>Fix:</strong> Increase <code>dirichlet_epsilon</code> from 0.25 to 0.35. Ensure noise is applied
+            during self-play but NOT during evaluation.
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Agent learns to stall (Tetris DQN)</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Symptom:</strong> Agent survives for many moves but rarely clears lines. Mean episode
+            length grows but lines-per-episode stays flat.<br />
+            <strong>Cause:</strong> Missing or too-weak time penalty; height penalty is too strong.<br />
+            <strong>Fix:</strong> Add/increase <code>penalty_time</code> (e.g., -0.5 per step). Reduce
+            <code>penalty_height</code> to allow the agent to build and clear.
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">AlphaZero not improving past iteration 20</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Symptom:</strong> Win rate plateaus at ~60-65% and doesn't improve further.<br />
+            <strong>Cause:</strong> Network is too small for the game complexity, or not enough self-play
+            games per iteration.<br />
+            <strong>Fix:</strong> Increase <code>num_res_blocks</code> from 4 to 9, and increase
+            <code>num_self_play_games</code> from 100 to 500. Or increase <code>num_searches</code>
+            from 50 to 200 for stronger training signal.
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">LibTorch: "Expected CUDA device but got CPU"</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Cause:</strong> Tensors are on CPU but model is on GPU (or vice versa).<br />
+            <strong>Fix:</strong> Ensure all tensors are moved to the same device:
+            <code>tensor.to(device)</code> and <code>model.to(device)</code> where
+            <code>device = torch::kCUDA</code> (C++) or <code>device = 'cuda'</code> (Python).
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Tetris DQN never improves beyond ~100 lines</h4>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <strong>Cause:</strong> Hole penalty is missing or too weak. Without hole penalty,
+            the agent has no signal to avoid the most common cause of death.<br />
+            <strong>Fix:</strong> Ensure <code>penalty_holes</code> is set to at least -2.0. The
+            single most impactful hyperparameter change for Tetris performance.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== NEXT STEPS ===================== -->
+    <section>
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        Next Steps
+      </h2>
+      <div class="prose">
+        <p>Once you've got basic training working, here are directions to explore:</p>
+        <ul>
+          <li>Run the <strong>reward shaping ablation</strong> from the Tetris reward-shaping page -- remove each penalty one at a time and measure the degradation.</li>
+          <li>Try the <strong>network size ablation</strong> -- systematically test hidden sizes from 32 to 1024.</li>
+          <li>For AlphaZero, try <strong>curriculum training</strong>: start with 50 MCTS simulations and increase to 400 as training progresses.</li>
+          <li>Implement <strong>self-play parallelism</strong> for AlphaZero using Python's <code>multiprocessing</code> module -- generate 4 games simultaneously.</li>
+          <li>Try training AlphaZero on <strong>Gomoku</strong> -- requires the heavier network but produces impressive results.</li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem;">
+        <a href={`${base}tetris/`}
+           style="padding: 0.7rem 1.4rem; background: var(--accent-blue); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Tetris DQN Docs
+        </a>
+        <a href={`${base}alphazero/`}
+           style="padding: 0.7rem 1.4rem; background: var(--accent-green); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          AlphaZero Docs
+        </a>
+        <a href={`${base}compare/`}
+           style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+          DQN vs AlphaZero
+        </a>
+      </div>
+    </section>
+
+  </div>
+</Layout>

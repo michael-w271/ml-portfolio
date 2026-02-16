@@ -1,0 +1,430 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="AlphaZero -- Neural Network Architecture" description="ResNet architecture for AlphaZero: StartBlock, ResBlocks, policy and value heads, board encoding, loss functions, WDL variant, and gradient flow through residual connections.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem;">
+        <a href={`${base}alphazero/`} style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">AlphaZero</a>
+        <span style="color: var(--text-secondary);">/</span>
+        <span style="color: var(--text-primary); font-size: 0.9rem;">Network Architecture</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-purple">ResNet</span>
+        <span class="tag tag-blue">Dual Head</span>
+        <span class="tag tag-green">Board Encoding</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.6rem; font-weight: 800; margin-bottom: 1rem;">
+        Neural Network Architecture
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.15rem; max-width: 750px; line-height: 1.7;">
+        A ResNet backbone shared between a policy head and a value head, board encoded as 3
+        channels, trained with cross-entropy + MSE loss on self-play data.
+      </p>
+    </div>
+
+    <!-- ===================== SECTION 1: ARCHITECTURE OVERVIEW ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. Full Architecture
+      </h2>
+
+      <pre style="font-size: 0.82rem; line-height: 1.6;"><code>
+  INPUT: board state encoded as 3-channel image
+  Shape: (3, rows, cols)  ->  (3, 6, 7) for Connect Four
+
+  +------------------------------------------------------------------+
+  |  START BLOCK                                                     |
+  |  Conv2d(in_channels=3, out_channels=64, kernel=3x3, pad=1)      |
+  |  BatchNorm2d(64)                                                 |
+  |  ReLU                                                            |
+  |  Output: (64, 6, 7)                                              |
+  +------------------------------------------------------------------+
+                      |
+         +------------+------------+
+         |            |            |
+         ?            ?            ?
+  +-------------+ +-------------+ +-------------+
+  |  ResBlock 1 | |  ResBlock 2 | |  ResBlock 3 | ...
+  | +---------+ | |             | |             | (N blocks)
+  | |Conv3x3  | | |  (same      | |  (same      |
+  | |BN+ReLU  | | |  structure) | |  structure) |
+  | |Conv3x3  | | |             | |             |
+  | |BN       | | |             | |             |
+  | +--+------+ | |             | |             |
+  |    | skip   | |             | |             |
+  |    +---> +   | |             | |             |
+  |       ReLU  | |             | |             |
+  +-------------+ +-------------+ +-------------+
+                      |
+         +------------+------------+
+         |                         |
+         ?                         ?
+  +------------------+    +------------------+
+  |  POLICY HEAD     |    |  VALUE HEAD      |
+  |  Conv2d(64->32)   |    |  Conv2d(64->3)    |
+  |  BN + ReLU       |    |  BN + ReLU       |
+  |  Flatten         |    |  Flatten         |
+  |  Linear(->actions)|    |  Linear(->1)      |
+  |  (raw logits)    |    |  Tanh            |
+  +------------------+    +------------------+
+         |                         |
+         ?                         ?
+  pi(s): action logits         V(s)  in  [-1, +1]
+  (apply softmax externally)  (win probability)
+</code></pre>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-purple);">4</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">ResBlocks (base config)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-blue);">64</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">Hidden channels (base)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-green);">20 / 128</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">Heavy config (Gomoku)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-orange);">3</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">Input channels</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 2: PYTORCH IMPLEMENTATION ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. PyTorch Implementation
+      </h2>
+
+      <pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class ResBlock(nn.Module):
+    """A single residual block: two conv layers with a skip connection."""
+    def __init__(self, num_hidden):
+        super().__init__()
+        self.conv1 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
+        self.bn1   = nn.BatchNorm2d(num_hidden)
+        self.conv2 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
+        self.bn2   = nn.BatchNorm2d(num_hidden)
+
+    def forward(self, x):
+        residual = x
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += residual   # &lt;- skip connection: adds input directly to output
+        return F.relu(out)
+
+
+class ResNet(nn.Module):
+    """AlphaZero ResNet: shared backbone + policy head + value head."""
+    def __init__(self, game, num_res_blocks=4, num_hidden=64):
+        super().__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # -- Start block ------------------------------------------------------
+        self.start_block = nn.Sequential(
+            nn.Conv2d(3, num_hidden, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_hidden),
+            nn.ReLU(),
+        )
+
+        # -- Residual tower ---------------------------------------------------
+        self.back_bone = nn.ModuleList(
+            [ResBlock(num_hidden) for _ in range(num_res_blocks)]
+        )
+
+        # -- Policy head ------------------------------------------------------
+        self.policy_head = nn.Sequential(
+            nn.Conv2d(num_hidden, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(32 * game.row_count * game.column_count,
+                      game.action_size),
+        )
+
+        # -- Value head -------------------------------------------------------
+        self.value_head = nn.Sequential(
+            nn.Conv2d(num_hidden, 3, kernel_size=3, padding=1),
+            nn.BatchNorm2d(3),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(3 * game.row_count * game.column_count, 1),
+            nn.Tanh(),   # squash to [-1, +1]
+        )
+
+        self.to(self.device)
+
+    def forward(self, x):
+        """Forward pass -- returns (policy_logits, value)."""
+        x = self.start_block(x)
+        for res_block in self.back_bone:
+            x = res_block(x)
+        policy = self.policy_head(x)  # raw logits -- softmax applied externally
+        value  = self.value_head(x)   #  in  [-1, +1]
+        return policy, value
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 3: BOARD ENCODING ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. Board Encoding -- 3 Channels
+      </h2>
+      <div class="prose">
+        <p>
+          The board is encoded as a 3-channel binary image, always from the current player's
+          perspective:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.2rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">Channel 0: Current Player</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            1 where the current player has a piece, 0 elsewhere.
+            After perspective flip, "current player" is always the one about to move.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Channel 1: Opponent</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            1 where the opponent has a piece, 0 elsewhere.
+            Together with channel 0, fully encodes piece positions.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.5rem;">Channel 2: Empty</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            1 where the cell is empty, 0 where it's occupied.
+            Redundant (= 1 - ch0 - ch1) but helps the conv network identify valid moves.
+          </p>
+        </div>
+      </div>
+
+      <pre><code class="language-python">def get_encoded_state(state):
+    """Encode board as (3, rows, cols) float32 tensor.
+
+    state: numpy array with values in {'{'}-1, 0, 1{'}'}
+        1 = current player's piece
+       -1 = opponent's piece
+        0 = empty
+    """
+    encoded = np.stack([
+        (state == 1).astype(np.float32),    # channel 0: current player
+        (state == -1).astype(np.float32),   # channel 1: opponent
+        (state == 0).astype(np.float32),    # channel 2: empty
+    ])
+    return encoded  # shape: (3, rows, cols)
+</code></pre>
+
+      <div class="callout callout-info" style="margin-top: 1rem;">
+        <strong>Why 3 channels instead of 1?</strong> A single channel with values {'{'}-1, 0, +1{'}'}
+        forces the network to learn that -1 and +1 are symmetric but different. Separate binary
+        channels make this symmetry explicit and easier for convolutional filters to detect
+        threats and opportunities from both sides simultaneously.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 4: LOSS FUNCTIONS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. Loss Functions
+      </h2>
+      <div class="prose">
+        <p>
+          The total loss is a sum of policy and value losses:
+        </p>
+      </div>
+
+      <div class="formula-box" style="margin: 1rem 0 1.5rem;">
+        L(theta) = CrossEntropy(pi, pi?) + MSE(z, ?)
+        <div style="margin-top: 0.8rem; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.9rem;">
+          <span style="color: var(--accent-cyan);">pi</span>
+          <span>MCTS visit count distribution (training target, soft labels)</span>
+          <span style="color: var(--accent-cyan);">pi?</span>
+          <span>Network policy output (softmax of logits)</span>
+          <span style="color: var(--accent-cyan);">z</span>
+          <span>Game outcome from self-play: +1 (win), 0 (draw), -1 (loss)</span>
+          <span style="color: var(--accent-cyan);">?</span>
+          <span>Network value output (tanh scalar)</span>
+        </div>
+      </div>
+
+      <pre><code class="language-python">def compute_loss(model, batch):
+    """Compute combined policy + value loss."""
+    state, policy_targets, value_targets = batch
+
+    # Forward pass
+    out_policy, out_value = model(state)  # logits and scalar
+
+    # Policy loss: cross-entropy
+    # policy_targets are softened MCTS visit distributions
+    policy_loss = F.cross_entropy(
+        out_policy,        # raw logits [batch, actions]
+        policy_targets     # target distributions [batch, actions]
+    )
+
+    # Value loss: MSE between predicted and actual game outcome
+    value_loss = F.mse_loss(
+        out_value.squeeze(1),   # [batch]
+        value_targets           # [batch], values in {'{'}-1, 0, +1{'}'}
+    )
+
+    return policy_loss + value_loss
+</code></pre>
+
+      <div class="prose" style="margin-top: 1.2rem;">
+        <p>
+          <strong>Why cross-entropy for policy?</strong> The MCTS visit counts give us a probability
+          distribution (soft labels) over moves. Cross-entropy is the natural loss for training
+          a probability distribution. Using the full distribution (not just the argmax) provides
+          richer training signal -- the network learns not just which move is best, but how much
+          better it is than alternatives.
+        </p>
+        <p>
+          <strong>Why MSE for value?</strong> The game outcome z is a scalar in {'{'}-1, 0, +1{'}'}, and
+          the network predicts a scalar in [-1, +1]. MSE is the natural regression loss here.
+          Note that value loss can be high early in training when the network is random, but
+          decreases dramatically as it learns to evaluate positions.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 5: WDL VARIANT ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. The WDL Variant
+      </h2>
+      <div class="prose">
+        <p>
+          Instead of predicting a scalar value in [-1, +1], the WDL (Win/Draw/Loss) variant
+          predicts a 3-class probability distribution: P(win), P(draw), P(loss).
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <h3 style="color: var(--accent-orange); margin-bottom: 0.6rem;">Standard Value Head</h3>
+          <pre style="font-size: 0.82rem;"><code>Linear(->1) -> Tanh
+Output: scalar  in  [-1, +1]
+Train: MSE(v, z)
+z  in  {'{'}-1, 0, +1{'}'}
+
+Advantage: simple
+Drawback: hard to distinguish
+  between "slight edge" vs
+  "certain win"</code></pre>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.6rem;">WDL Value Head</h3>
+          <pre style="font-size: 0.82rem;"><code>Linear(->3) -> Softmax
+Output: [P(W), P(D), P(L)]
+Train: CrossEntropy(v, z)
+z  in  {'{'}[1,0,0], [0,1,0], [0,0,1]{'}'}
+
+Advantage: calibrated uncertainty
+  network knows "likely draw"
+  vs "sure win"
+Scalar value = P(W) - P(L)</code></pre>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          The WDL approach is used in Leela Chess Zero and modern AlphaZero implementations.
+          It provides better-calibrated value estimates and can distinguish between a position
+          that's likely to end in a draw from one that's an uncertain win -- information the
+          scalar head loses.
+        </p>
+        <p>
+          Converting WDL back to a scalar: V = P(win) - P(loss), with P(draw) acting as
+          uncertainty. This scalar is then used in the PUCT formula as the Q-value.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 6: RESIDUAL CONNECTIONS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. Why Residual Connections?
+      </h2>
+      <div class="prose">
+        <p>
+          Standard deep networks suffer from the <strong>vanishing gradient problem</strong>:
+          gradients diminish exponentially as they propagate backward through many layers, making
+          training very deep networks difficult.
+        </p>
+        <p>
+          Residual connections solve this by providing a direct gradient pathway from the loss
+          to early layers:
+        </p>
+      </div>
+
+      <div class="formula-box">
+        ResBlock output: H(x) = F(x) + x
+        <div style="margin-top: 0.6rem; font-size: 0.9rem;">
+          dL/dx = dL/dH . (dF/dx + 1)
+        </div>
+        <div style="margin-top: 0.3rem; font-size: 0.88rem; color: var(--text-secondary);">
+          The "+1" ensures gradient is never zero -- no matter how small dF/dx becomes.
+        </div>
+      </div>
+
+      <div class="prose" style="margin-top: 1.2rem;">
+        <p>
+          In practice, residual networks have several benefits for AlphaZero:
+        </p>
+        <ul>
+          <li><strong>Depth without degradation:</strong> Can stack 20+ ResBlocks without training instability</li>
+          <li><strong>Identity shortcut:</strong> If a layer isn't useful, it learns F(x)=0, effectively skipping itself. This makes the effective depth adaptive.</li>
+          <li><strong>Better feature reuse:</strong> Features from earlier layers persist throughout the network, allowing both low-level patterns (piece positions) and high-level patterns (strategic threats) to be used by the heads.</li>
+          <li><strong>Faster training convergence:</strong> Good gradient flow from the start of training.</li>
+        </ul>
+        <p>
+          The heavier configuration used for Gomoku (20 ResBlocks, 128 channels) would be
+          completely untrainable as a plain deep network -- residual connections are essential
+          at that depth.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--accent-blue);">4 blocks / 64ch</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Connect Four base config</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--accent-green);">9 blocks / 128ch</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Connect Four heavy config</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--accent-purple);">20 blocks / 128ch</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Gomoku config</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+      <a href={`${base}alphazero/mcts/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        &lt;- MCTS Deep Dive
+      </a>
+      <a href={`${base}alphazero/training/`}
+         style="padding: 0.7rem 1.4rem; background: var(--accent-green); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Training ->
+      </a>
+    </div>
+
+  </div>
+</Layout>

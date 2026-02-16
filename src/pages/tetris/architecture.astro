@@ -1,0 +1,459 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Tetris DQN -- Neural Network Architecture" description="Deep dive into the Tetris DQN network: 40 input features, QNetImpl in C++/LibTorch, Huber loss, ablation study results, and why 128 hidden units beats larger networks.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem;">
+        <a href={`${base}tetris/`} style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">Tetris DQN</a>
+        <span style="color: var(--text-secondary);">/</span>
+        <span style="color: var(--text-primary); font-size: 0.9rem;">Architecture</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-blue">Neural Network</span>
+        <span class="tag tag-orange">C++ / LibTorch</span>
+        <span class="tag tag-purple">Ablation Study</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.6rem; font-weight: 800; margin-bottom: 1rem;">
+        Neural Network Architecture
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.15rem; max-width: 750px; line-height: 1.7;">
+        The QNetImpl class, the 40-feature input vector, Huber loss, ablation study results,
+        and the surprising finding that 128 hidden units beats 1024.
+      </p>
+    </div>
+
+    <!-- ===================== ARCHITECTURE DIAGRAM ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. Full Architecture Diagram
+      </h2>
+
+      <pre style="font-size: 0.82rem; line-height: 1.6;"><code>
+  INPUT FEATURES (40-dimensional)
+  ====================================================================
+  | col_h[0] col_h[1] ... col_h[9] | holes[0] ... holes[9] | agg | bump | tot_holes | max_h | lines | covered | piece[7] | next[7] |
+  +------------------ 40 floats --------------------------------------+
+                              |
+                    BatchNorm1d (optional)
+                              |
+  +-----------------------------------------------------------------+
+  |  FULLY CONNECTED LAYER 1                                        |
+  |  Linear(40 -> 128)                                               |
+  |  ReLU activation                                                |
+  +-----------------------------------------------------------------+
+                              |
+  +-----------------------------------------------------------------+
+  |  FULLY CONNECTED LAYER 2                                        |
+  |  Linear(128 -> 128)                                              |
+  |  ReLU activation                                                |
+  +-----------------------------------------------------------------+
+                              |
+  +-----------------------------------------------------------------+
+  |  OUTPUT LAYER                                                   |
+  |  Linear(128 -> 1)                                                |
+  |  No activation (raw Q-value)                                    |
+  +-----------------------------------------------------------------+
+                              |
+                         Q(s)  in  R
+              (scalar quality score for afterstate s)
+
+  Total parameters: 40x128 + 128 + 128x128 + 128 + 128x1 + 1 = 21,889
+</code></pre>
+
+      <div class="callout callout-info" style="margin-top: 1rem;">
+        <strong>Afterstate DQN:</strong> Unlike standard DQN which outputs one Q-value per action,
+        this network outputs a single scalar. The agent calls it 40 times (once per possible placement)
+        in a batched forward pass, then selects the placement with the highest output.
+      </div>
+    </section>
+
+    <!-- ===================== INPUT FEATURES DETAIL ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. Input Features -- Detailed Formulas
+      </h2>
+      <div class="prose">
+        <p>
+          All features are extracted from the board state <em>after</em> a hypothetical piece
+          placement (the "afterstate"). Each of the 40 placements has its features extracted
+          independently, then batched for a single GPU forward pass.
+        </p>
+      </div>
+
+      <h3 style="font-size: 1.2rem; color: var(--accent-blue); margin: 1.5rem 0 0.8rem;">Indices 0-9: Column Heights</h3>
+      <div class="formula-box">
+        height[c] = max&#123; r  in  [0, 20) : board[r][c] == 1 &#125;,  for c  in  &#123;0, ..., 9&#125;
+        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+          0 if column is empty, otherwise the row index of the highest filled cell (0 = top).
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.2rem; color: var(--accent-orange); margin: 1.5rem 0 0.8rem;">Indices 10-19: Holes per Column</h3>
+      <div class="formula-box">
+        holes[c] = ?&#123; r=height[c]+1 to 19 : board[r][c] == 0 &#125;
+        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+          Count of empty cells below the highest filled cell in each column.
+          A hole is any empty cell with a filled cell above it -- it can only be cleared
+          by filling all rows above it.
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.2rem; color: var(--accent-green); margin: 1.5rem 0 0.8rem;">Indices 20-25: Aggregate Statistics</h3>
+      <div style="display: grid; gap: 0.8rem; margin-bottom: 1rem;">
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 20 -- Aggregate Height:</strong>  agg_h = ?_{'{'}c=0{'}'}^{'{'}9{'}'} height[c]
+        </div>
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 21 -- Bumpiness:</strong>  bump = ?_{'{'}c=0{'}'}^{'{'}8{'}'} |height[c] - height[c+1]|
+        </div>
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 22 -- Total Holes:</strong>  total_holes = ?_{'{'}c=0{'}'}^{'{'}9{'}'} holes[c]
+        </div>
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 23 -- Max Height:</strong>  max_h = max_{'{'}c{'}'} height[c]
+        </div>
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 24 -- Lines Cleared:</strong>  lines = number of complete rows removed by this placement
+        </div>
+        <div class="formula-box" style="padding: 0.8rem 1.2rem;">
+          <strong>Index 25 -- Covered Cells:</strong>  covered = ?_{'{'}c{'}'} ?_{'{'}r above a hole{'}'} 1
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.2rem; color: var(--accent-purple); margin: 1.5rem 0 0.8rem;">Indices 26-32: Current Piece (One-Hot)</h3>
+      <div class="prose">
+        <p>
+          Seven-dimensional one-hot vector encoding the current active tetromino:
+        </p>
+      </div>
+      <pre><code>Index:  26    27    28    29    30    31    32
+Piece:  I     O     T     S     Z     J     L
+Value:  [0,    0,    1,    0,    0,    0,    0]  &lt;- T-piece active
+</code></pre>
+
+      <h3 style="font-size: 1.2rem; color: var(--accent-cyan); margin: 1.5rem 0 0.8rem;">Indices 33-39: Next Piece (One-Hot)</h3>
+      <div class="prose">
+        <p>
+          Same encoding for the next queued piece. Allows the agent to plan ahead: for example,
+          if the next piece is an I-piece, it's worth leaving a clean vertical gap for a Tetris.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== C++ IMPLEMENTATION ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. The QNetImpl Class in C++
+      </h2>
+      <div class="prose">
+        <p>
+          The network is defined using LibTorch's C++ module API. The <code>TORCH_MODULE</code>
+          macro wraps <code>QNetImpl</code> into a shared_ptr-based <code>QNet</code> handle,
+          following LibTorch conventions.
+        </p>
+      </div>
+
+      <pre><code class="language-cpp">#include &lt;torch/torch.h&gt;
+
+struct QNetImpl : torch::nn::Module &#123;
+    torch::nn::Linear fc1, fc2, fc3;
+
+    QNetImpl(int input_dim = 40, int hidden_dim = 128)
+        : fc1(torch::nn::LinearOptions(input_dim, hidden_dim)),
+          fc2(torch::nn::LinearOptions(hidden_dim, hidden_dim)),
+          fc3(torch::nn::LinearOptions(hidden_dim, 1))
+    &#123;
+        // Register submodules so parameters() includes them all
+        register_module("fc1", fc1);
+        register_module("fc2", fc2);
+        register_module("fc3", fc3);
+    &#125;
+
+    // Standard forward pass
+    torch::Tensor forward(torch::Tensor x) &#123;
+        x = torch::relu(fc1(x));   // [batch, hidden_dim]
+        x = torch::relu(fc2(x));   // [batch, hidden_dim]
+        x = fc3(x);                // [batch, 1]
+        return x;
+    &#125;
+
+    // Extended forward: returns activations at each layer
+    // Used by the React dashboard to visualise network internals
+    std::tuple&lt;torch::Tensor, torch::Tensor, torch::Tensor&gt;
+    forward_with_activations(torch::Tensor x) &#123;
+        auto h1 = torch::relu(fc1(x));   // first hidden activations
+        auto h2 = torch::relu(fc2(h1));  // second hidden activations
+        auto out = fc3(h2);              // output Q-value
+        return std::make_tuple(h1, h2, out);
+    &#125;
+&#125;;
+
+TORCH_MODULE(QNet);   // creates QNet = std::shared_ptr&lt;QNetImpl&gt;
+
+// -- Usage ----------------------------------------------------------
+// QNet online_net(40, 128);    // online network
+// QNet target_net(40, 128);    // frozen target network
+// online_net->to(device);      // move to GPU
+// target_net->eval();          // disable dropout/BN if added later
+</code></pre>
+
+      <div class="callout callout-info" style="margin-top: 1.2rem;">
+        <strong>forward_with_activations():</strong> This method is used exclusively by the
+        monitoring dashboard to visualise which neurons are most active for different board
+        positions. It exposes the intermediate hidden-layer activations alongside the Q-value,
+        enabling a live heatmap of network internals without requiring a separate profiling pass.
+      </div>
+    </section>
+
+    <!-- ===================== LOSS FUNCTION ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. Loss Function: Smooth L1 (Huber Loss)
+      </h2>
+      <div class="prose">
+        <p>
+          The network is trained to minimise the Bellman error between the predicted Q-value
+          and the one-step TD target. Two loss functions are common:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-orange);">
+          <h3 style="color: var(--accent-orange); margin-bottom: 0.6rem;">MSE Loss</h3>
+          <div class="formula-box" style="font-size: 0.9rem;">L_MSE = (y - ?)2</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.8rem;">
+            Gradient = 2(y-?). Large errors (outliers) produce massive gradients, destabilising
+            training. Early in RL, TD errors can be very large.
+          </p>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.6rem;">Huber / Smooth L1 Loss</h3>
+          <div class="formula-box" style="font-size: 0.9rem;">
+            L_Huber = &#123; 0.5.delta2     if |delta| &lt; 1<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|delta| - 0.5   otherwise &#125;
+          </div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.8rem;">
+            Behaves like MSE for small errors (quadratic), but L1 for large errors (linear gradient).
+            Robust to outliers, critical for early training stability.
+          </p>
+        </div>
+      </div>
+
+      <div class="formula-box">
+        <div style="text-align: center; margin-bottom: 0.8rem;">Full DQN Loss (Huber)</div>
+        L(theta) = E_{'{'} (s,a,r,s') ~ D {'}'} [ SmoothL1( r + gamma . max_{'{'}a'{'}'} Q(s', a'; theta?) - Q(s, a; theta) ) ]
+        <div style="margin-top: 0.8rem; font-size: 0.88rem; color: var(--text-secondary);">
+          theta? = target network parameters (frozen);  D = replay buffer
+        </div>
+      </div>
+
+      <pre><code class="language-cpp">// C++ loss calculation with LibTorch
+auto q_predicted = online_net->forward(states_batch)
+                              .squeeze(1);  // [batch]
+
+auto q_target = rewards_batch
+    + gamma * target_net->forward(next_states_batch)
+                         .squeeze(1)
+                         .detach()           // no gradient through target
+    * (1.0f - dones_batch);                  // zero out terminal states
+
+// Smooth L1 = Huber loss with delta=1
+auto loss = torch::smooth_l1_loss(q_predicted, q_target);
+
+optimizer.zero_grad();
+loss.backward();
+// Gradient clipping prevents exploding gradients
+torch::nn::utils::clip_grad_norm_(online_net->parameters(), 10.0);
+optimizer.step();
+</code></pre>
+    </section>
+
+    <!-- ===================== OPTIMIZER ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. Optimizer: Adam
+      </h2>
+      <div class="prose">
+        <p>
+          The network is trained with the <strong>Adam optimizer</strong> (Kingma &amp; Ba, 2015)
+          with the following configuration:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-blue);">1e-4</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">Learning Rate alpha</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-green);">0.9</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">beta1 (momentum)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-orange);">0.999</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">beta2 (RMSProp term)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-purple);">1e-8</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">epsilon (numerical stability)</div>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          Adam was chosen over SGD because RL training has highly non-stationary gradients -- the
+          loss landscape shifts as the target network updates and as the agent's policy improves.
+          Adam's per-parameter adaptive learning rates handle this well. RMSProp is another common
+          choice (used in the original DQN paper), but Adam has empirically performed better in
+          these experiments.
+        </p>
+        <p>
+          The learning rate of 1e-4 was selected through grid search. Higher rates (1e-3) caused
+          oscillation and instability; lower rates (1e-5) converged too slowly.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== ABLATION STUDY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. Network Size Ablation Study
+      </h2>
+      <div class="prose">
+        <p>
+          To find the optimal network size, all other hyperparameters were held constant while
+          varying the hidden layer width. Each configuration was trained for 200K episodes with the
+          same reward function and random seed range (3 seeds per config). Results are best
+          episode lines cleared.
+        </p>
+      </div>
+
+      <div style="overflow-x: auto; margin: 1.5rem 0;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Hidden Units</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Parameters</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Best Lines</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Avg Lines (200K ep)</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Convergence</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left;">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 600;">32</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">2,273</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-orange);">3,412</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">847</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Slow</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Underfitting; too few parameters</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 600;">64</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">7,489</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-orange);">8,911</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">2,340</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Moderate</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Solid baseline</td>
+            </tr>
+            <tr style="background: rgba(59, 130, 246, 0.08);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 700; color: var(--accent-blue);">128 ?</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">21,889</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-green); font-weight: 700;">22,645</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 700;">7,832</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Fast</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-blue);">OPTIMAL -- best bias-variance balance</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 600;">256</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">79,617</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-orange);">14,220</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">5,104</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Moderate</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Slightly worse; starts overfitting</td>
+            </tr>
+            <tr style="background: var(--bg-secondary);">
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 600;">512</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">296,961</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-orange);">9,871</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">3,215</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Slow</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Overfit: memorises specific positions</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); font-weight: 600;">1024</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">1,152,513</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-orange);">5,230</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">1,890</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Very slow</td>
+              <td style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Severe overfitting; unstable Q-values</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="font-size: 1.3rem; color: var(--text-primary); margin: 1.8rem 0 0.8rem;">
+        Why 128 Beats Larger Networks
+      </h3>
+      <div class="prose">
+        <p>
+          The result is counterintuitive: more parameters = worse performance. The explanation
+          lies in the <strong>bias-variance tradeoff</strong> in the context of RL:
+        </p>
+        <ul>
+          <li>
+            <strong>Overfitting in RL:</strong> A large network can memorise specific Q-values
+            for specific states seen many times in the replay buffer, rather than learning a
+            generalised value function. When a novel board position appears, the prediction
+            is unreliable.
+          </li>
+          <li>
+            <strong>Generalisation requirement:</strong> The feature space is 40-dimensional.
+            The value function is relatively smooth -- similar board configurations should have
+            similar Q-values. A small network is forced to learn this smooth structure;
+            a large one can represent arbitrary discontinuities.
+          </li>
+          <li>
+            <strong>Non-stationarity:</strong> RL training is fundamentally non-stationary --
+            the target distribution changes as the policy improves. Larger networks are harder
+            to retrain quickly because their gradient steps are noisier (more parameters,
+            same batch size = less update per parameter per step).
+          </li>
+          <li>
+            <strong>Sample efficiency:</strong> With 40 features and a relatively low-complexity
+            value landscape, the "sweet spot" is a network that can represent the function
+            without wasting capacity on memorised noise.
+          </li>
+        </ul>
+      </div>
+
+      <div class="callout callout-success">
+        <strong>Rule of thumb for feature-based RL:</strong> Start with 2-3x the input dimension
+        as your hidden layer width. For 40 features, 128 hidden units (3.2x) is optimal.
+        Raw-pixel inputs with CNNs follow different scaling laws.
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+      <a href={`${base}tetris/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        &lt;- Project Overview
+      </a>
+      <a href={`${base}tetris/reward-shaping/`}
+         style="padding: 0.7rem 1.4rem; background: var(--accent-orange); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Reward Shaping ->
+      </a>
+      <a href={`${base}tetris/training/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Training Pipeline
+      </a>
+    </div>
+
+  </div>
+</Layout>

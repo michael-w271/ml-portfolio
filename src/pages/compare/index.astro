@@ -1,0 +1,464 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="DQN vs AlphaZero -- A Comparison" description="Head-to-head comparison of DQN and AlphaZero: algorithm type, sample efficiency, state representation, reward signal, and key lessons from both projects.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-blue">DQN</span>
+        <span class="tag tag-green">AlphaZero</span>
+        <span class="tag tag-orange">Comparison</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem;">
+        DQN vs AlphaZero
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.2rem; max-width: 750px; line-height: 1.7;">
+        Two powerful but fundamentally different RL approaches -- contrasted across algorithm type,
+        sample efficiency, state representation, exploration, and practical applicability.
+      </p>
+    </div>
+
+    <!-- ===================== HIGH-LEVEL COMPARISON TABLE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. High-Level Comparison
+      </h2>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left; width: 22%;">Aspect</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left; color: var(--accent-blue); width: 39%;">Tetris DQN</th>
+              <th style="padding: 0.75rem 1rem; border: 1px solid var(--border); text-align: left; color: var(--accent-green); width: 39%;">AlphaZero</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Algorithm family</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Value-based (Deep Q-Learning)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Policy + Value (Actor-Critic via MCTS)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Model type</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Model-free (no simulator in decision loop)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Model-based (game simulator used by MCTS)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Network architecture</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">MLP: 40->128->128->1 (21K params)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">ResNet: 4 blocks, 64 hidden + dual heads (~350K params)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">State representation</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">40 handcrafted features</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">3-channel board image (raw)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Action space</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">~40 placements (discrete, enumerable)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">7 columns (Connect Four)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Reward signal</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Dense, shaped (holes, bumpiness, lines, game-over)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Sparse (win/draw/loss only)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Exploration strategy</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">epsilon-greedy (linear decay 1.0->0.01)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">PUCT + Dirichlet noise at root</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Learning signal source</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Temporal difference (TD) bootstrapping</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Expert iteration (MCTS policy + game outcome)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Opponent model</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">N/A (single-player game)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Self-play (agent plays both sides)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Domain knowledge required</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">High (40 handcrafted features + shaped reward)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">None (only game rules)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Implementation language</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">C++17 + LibTorch</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">Python + PyTorch</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Training time</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">~4 hours (500K episodes, C++ engine)</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);">~16 minutes (50 iterations, RTX 5080)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border);font-weight:600;">Best result</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border); color: var(--accent-blue); font-weight: 700;">22,645 lines cleared</td>
+              <td style="padding:0.7rem 1rem;border:1px solid var(--border); color: var(--accent-green); font-weight: 700;">82.5% win rate vs random</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== VALUE VS POLICY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. Value-Based vs Policy-Based
+      </h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-top: 3px solid var(--accent-blue);">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.8rem;">DQN: Value-Based</h3>
+          <div class="prose">
+            <p style="font-size: 0.9rem;">
+              DQN learns Q(s,a) -- the expected future reward of taking action a in state s.
+              The policy is implicit: always take argmax_a Q(s,a).
+            </p>
+            <p style="font-size: 0.9rem;">
+              This is natural for Tetris because: (1) the action space is enumerable (40 placements),
+              (2) we can compute the afterstate for each action, (3) a scalar quality score per
+              state is exactly what we need for afterstate evaluation.
+            </p>
+          </div>
+        </div>
+        <div class="stat-card" style="border-top: 3px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">AlphaZero: Policy + Value</h3>
+          <div class="prose">
+            <p style="font-size: 0.9rem;">
+              AlphaZero learns both a policy pi(a|s) and a value V(s). The policy guides MCTS
+              exploration; the value provides leaf evaluation. Together they replace both rollouts
+              and hand-crafted heuristics.
+            </p>
+            <p style="font-size: 0.9rem;">
+              This is natural for two-player games because: (1) the policy head directly outputs
+              move probabilities, (2) the value head evaluates positions from either player's
+              perspective via perspective flipping.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MODEL-FREE VS MODEL-BASED ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. Model-Free vs Model-Based
+      </h2>
+      <div class="prose">
+        <p>
+          This is one of the most important differences between the two projects:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.2rem 0;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.6rem;">Tetris: Model-Free</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.8rem;">
+            The Tetris DQN does not use a simulator when making decisions. It looks at the current
+            state, calls the neural network, and picks the highest-scoring action. No lookahead.
+          </p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Exception: the afterstate evaluation <em>does</em> simulate placements to compute
+            feature vectors -- but it only simulates a single step, not a full game tree.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.6rem;">AlphaZero: Model-Based</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.8rem;">
+            AlphaZero's MCTS uses a game simulator to explore future states during decision-making.
+            Each simulation plays out a sequence of moves (50-400 of them), building a tree of
+            possible futures.
+          </p>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            This is only possible because Connect Four has a perfect, deterministic simulator.
+            Real-world RL (robotics, finance) usually doesn't have this luxury.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== WHEN TO USE EACH ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. When to Use Each Approach
+      </h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="border: 2px solid var(--accent-blue);">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.8rem;">Use DQN When...</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+            <li>Real-time decisions required (no time for tree search)</li>
+            <li>No perfect simulator available</li>
+            <li>Single-player or non-adversarial settings</li>
+            <li>Dense or shapeable reward signal</li>
+            <li>Environment is stochastic or partially observable</li>
+            <li>Action space is enumerable</li>
+            <li>You have domain knowledge to encode as features</li>
+          </ul>
+          <div style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--accent-blue);">
+            Examples: Tetris, Atari games, inventory management, recommendation systems
+          </div>
+        </div>
+        <div class="stat-card" style="border: 2px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">Use AlphaZero When...</h3>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+            <li>Perfect-information, deterministic game</li>
+            <li>A fast, accurate simulator is available</li>
+            <li>Reward is sparse (win/loss/draw)</li>
+            <li>Long-horizon planning is required</li>
+            <li>No domain knowledge available or desired</li>
+            <li>Two-player zero-sum structure</li>
+            <li>You have sufficient compute</li>
+          </ul>
+          <div style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--accent-green);">
+            Examples: Chess, Go, Connect Four, Gomoku, combinatorial optimization
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SAMPLE EFFICIENCY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. Sample Efficiency
+      </h2>
+      <div class="prose">
+        <p>
+          "Sample efficiency" measures how much data (environment interactions) is needed to
+          reach a given performance level.
+        </p>
+      </div>
+
+      <div style="overflow-x: auto; margin: 1.2rem 0;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Metric</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-blue);">Tetris DQN</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border); color: var(--accent-green);">AlphaZero</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Environment steps to first useful policy</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">~50,000 steps</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">~2,000 MCTS simulations (5 games)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Total steps to near-optimal</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">~20,000,000 (500K episodes x 40 steps)</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">~500,000 MCTS simulations total</td>
+            </tr>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Data reuse (replay)</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">High (100K buffer, each transition used ~5x)</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Moderate (all data from current iteration used)</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Compute per decision (inference)</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1 forward pass (batch=40) ~= 0.35ms</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">400 forward passes ~= 120ms</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>The fundamental trade-off:</strong> DQN is more sample-efficient with dense reward
+        shaping but requires significant domain knowledge to design the reward. AlphaZero requires
+        no reward shaping but needs a fast simulator and much more compute per decision. Both
+        approaches are valid -- the right choice depends entirely on what information you have.
+      </div>
+    </section>
+
+    <!-- ===================== FEATURE ENG VS RAW BOARD ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. Feature Engineering vs Raw Board Encoding
+      </h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.2rem 0;">
+        <div class="stat-card">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.8rem;">Handcrafted Features (Tetris)</h3>
+          <div class="prose" style="font-size: 0.9rem;">
+            <p><strong>Pros:</strong></p>
+            <ul>
+              <li>Small input dimension (40 vs 200)</li>
+              <li>Encodes expert knowledge directly</li>
+              <li>Network has fewer things to learn</li>
+              <li>Generalises to unseen board configurations</li>
+              <li>Faster training (smaller network)</li>
+            </ul>
+            <p style="margin-top: 0.8rem;"><strong>Cons:</strong></p>
+            <ul>
+              <li>Requires domain knowledge to design</li>
+              <li>May miss non-obvious patterns</li>
+              <li>Not transferable to different games</li>
+              <li>Feature selection is an art, not science</li>
+            </ul>
+          </div>
+        </div>
+        <div class="stat-card">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">Raw Board Encoding (AlphaZero)</h3>
+          <div class="prose" style="font-size: 0.9rem;">
+            <p><strong>Pros:</strong></p>
+            <ul>
+              <li>No domain knowledge required</li>
+              <li>Network discovers its own features</li>
+              <li>Transferable -- same encoding for any game</li>
+              <li>Can discover non-obvious patterns</li>
+              <li>Scales to any board game with rule change only</li>
+            </ul>
+            <p style="margin-top: 0.8rem;"><strong>Cons:</strong></p>
+            <ul>
+              <li>Requires much more data to learn features</li>
+              <li>Larger network (needs conv layers)</li>
+              <li>Less interpretable internals</li>
+              <li>Higher compute requirements</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== WHAT IF ALPHAZERO FOR TETRIS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        7. What Would Happen if AlphaZero Played Tetris?
+      </h2>
+      <div class="prose">
+        <p>
+          This is a fascinating thought experiment. Applying AlphaZero to Tetris is theoretically
+          possible but faces significant challenges:
+        </p>
+        <ul>
+          <li>
+            <strong>No clear terminal reward:</strong> AlphaZero requires a win/loss/draw signal.
+            Tetris has no natural "opponent" -- you could define survival time or total lines as a
+            scalar reward, but this violates AlphaZero's two-player game assumption.
+          </li>
+          <li>
+            <strong>Large state space:</strong> Tetris has ~10^30 possible board states vs ~10^14
+            for Connect Four. AlphaZero's MCTS would need vastly more simulations to cover the
+            relevant state space.
+          </li>
+          <li>
+            <strong>Stochastic inputs:</strong> Piece sequences are random in Tetris. AlphaZero
+            assumes deterministic transitions; stochasticity requires modifications like
+            expectimax search or explicit chance nodes.
+          </li>
+          <li>
+            <strong>Single-player:</strong> Self-play doesn't apply. You'd need to train against
+            a random/fixed opponent (the piece generator) or use a curiosity-based exploration
+            mechanism.
+          </li>
+        </ul>
+        <p>
+          A hybrid approach might work: use MCTS for a few steps of lookahead (5-10 moves) with
+          the Q-network providing leaf evaluation, similar to AlphaZero but with the DQN's shaped
+          reward as the terminal signal. This "model-based DQN" could potentially outperform
+          both pure approaches.
+        </p>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Research direction:</strong> This hybrid approach -- combining MCTS lookahead with
+        learned value functions and dense reward shaping -- is an active area of research. MuZero
+        (DeepMind, 2020) goes further, learning the simulator itself from raw observations,
+        making it applicable to Tetris without a hand-built model.
+      </div>
+    </section>
+
+    <!-- ===================== KEY LESSONS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        8. Key Lessons Learned
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem;">
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">Reward shaping is powerful</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            The 100x improvement from sparse to shaped rewards in Tetris shows that the reward
+            function is as important as the algorithm. Bad rewards = bad policies, regardless of
+            network size.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-green);">
+          <h4 style="color: var(--accent-green); margin-bottom: 0.5rem;">Smaller networks often win</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            128 units beats 1024 for Tetris DQN. RL is not a regime where more parameters is
+            always better. The inductive bias of a small network can be an advantage.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-orange);">
+          <h4 style="color: var(--accent-orange); margin-bottom: 0.5rem;">Self-play is remarkably powerful</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            AlphaZero discovers strategic concepts (centre control, double threats) with zero
+            domain knowledge. Pure self-play + MCTS is sufficient for strong game play.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-purple);">
+          <h4 style="color: var(--accent-purple); margin-bottom: 0.5rem;">The credit assignment problem is central</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Both projects highlight credit assignment. Tetris solves it with shaped rewards;
+            AlphaZero solves it by playing to the end and assigning credit via game outcome.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-cyan);">
+          <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">Implementation language matters</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            C++/LibTorch gives 7x throughput for the environment-heavy Tetris DQN. Python is
+            fine for the network-heavy AlphaZero where GPU is the bottleneck.
+          </p>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid var(--accent-blue);">
+          <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">Target network stability is essential</h4>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">
+            Without the target network, DQN diverges. Without Dirichlet noise, AlphaZero
+            collapses to a single strategy. Stability mechanisms are not optional.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Research directions -->
+    <section style="margin-bottom: 2.5rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        9. Research Directions
+      </h2>
+      <div class="prose">
+        <ul>
+          <li><strong>Inverse RL:</strong> Can we learn the reward function from human Tetris play? Infer what experts are optimising.</li>
+          <li><strong>Imitation learning:</strong> Pretrain the DQN from human Tetris games, then fine-tune with RL.</li>
+          <li><strong>MuZero for Tetris:</strong> Learn the transition model from observations; apply MCTS without a hand-built simulator.</li>
+          <li><strong>AlphaZero-Tetris hybrid:</strong> Use MCTS for k-step lookahead with DQN providing leaf values.</li>
+          <li><strong>Curiosity-driven exploration:</strong> Replace epsilon-greedy with intrinsic motivation (ICM) for discovering line-clearing strategies.</li>
+        </ul>
+      </div>
+    </section>
+
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+      <a href={`${base}tetris/`}
+         style="padding: 0.7rem 1.4rem; background: var(--accent-blue); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Tetris DQN
+      </a>
+      <a href={`${base}alphazero/`}
+         style="padding: 0.7rem 1.4rem; background: var(--accent-green); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        AlphaZero
+      </a>
+      <a href={`${base}train/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Train Your Own ->
+      </a>
+    </div>
+
+  </div>
+</Layout>

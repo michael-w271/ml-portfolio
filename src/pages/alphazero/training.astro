@@ -1,0 +1,453 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="AlphaZero -- Self-Play & Training" description="AlphaZero self-play training loop: learn() method, temperature scheduling, replay buffer, loss curves, evaluation protocol, and expert iteration insight.">
+  <div style="max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem;">
+
+    <div style="margin-bottom: 2.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem;">
+        <a href={`${base}alphazero/`} style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">AlphaZero</a>
+        <span style="color: var(--text-secondary);">/</span>
+        <span style="color: var(--text-primary); font-size: 0.9rem;">Training</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+        <span class="tag tag-green">Self-Play</span>
+        <span class="tag tag-blue">Expert Iteration</span>
+        <span class="tag tag-purple">Training Loop</span>
+      </div>
+      <h1 class="gradient-text" style="font-size: 2.6rem; font-weight: 800; margin-bottom: 1rem;">
+        Self-Play &amp; Training
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 1.15rem; max-width: 750px; line-height: 1.7;">
+        The complete AlphaZero training loop: self-play data generation, temperature scheduling,
+        replay buffer management, and the virtuous cycle that creates superhuman play.
+      </p>
+    </div>
+
+    <!-- Key training results -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;">
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-blue);">0 -> 82.5%</div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Win rate vs random (50 iter)</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-green);">2.15 -> 0.25</div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Loss (iter 0 -> iter 49)</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-orange);">16 min</div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">Total training time</div>
+      </div>
+      <div class="stat-card" style="text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: var(--accent-purple);">400 MB</div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.3rem;">VRAM used</div>
+      </div>
+    </div>
+
+    <!-- ===================== SECTION 1: FULL TRAINING LOOP ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        1. The Full Training Loop -- learn()
+      </h2>
+
+      <pre><code class="language-python">class AlphaZero:
+    def __init__(self, model, optimizer, game, args):
+        self.model     = model
+        self.optimizer = optimizer
+        self.game      = game
+        self.args      = args   # num_iterations, num_self_play_games, etc.
+        self.mcts      = MCTS(game, args, model)
+
+    def learn(self):
+        """Main AlphaZero training loop."""
+        for iteration in range(self.args['num_iterations']):
+            print(f"=== Iteration {'{'}iteration{'}'}/{'{'}self.args['num_iterations']{'}'} ===")
+
+            # -- Step 1: Self-Play -----------------------------------------
+            memory = []
+            self.model.eval()   # no dropout during inference
+
+            for game_idx in range(self.args['num_self_play_games']):
+                game_memory = self.selfPlay()
+                memory += game_memory
+
+            # -- Step 2: Train Network -------------------------------------
+            self.model.train()
+            random.shuffle(memory)
+            self.train(memory)
+
+            # -- Step 3: Evaluate -----------------------------------------
+            if iteration % 5 == 0:
+                win_rate = self.evaluate(n_games=100)
+                print(f"  Win rate vs random: {'{'}win_rate:.1%{'}'}")
+
+            # -- Save checkpoint -------------------------------------------
+            torch.save(self.model.state_dict(),
+                       f"checkpoints/model_iter{'{'}iteration{'}'}.pt")
+            torch.save(self.optimizer.state_dict(),
+                       f"checkpoints/optimizer_iter{'{'}iteration{'}'}.pt")
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 2: SELF-PLAY ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        2. Self-Play -- Generating Training Data
+      </h2>
+
+      <pre><code class="language-python">def selfPlay(self):
+    """Play one game against itself, collecting (state, pi, z) tuples."""
+    memory = []           # will hold (state, pi, player) until game ends
+    player = 1
+    state  = self.game.get_initial_state()
+
+    while True:
+        # Board from current player's perspective
+        canonical_state = self.game.change_perspective(state, player)
+
+        # Run MCTS to get visit count distribution
+        # Temperature tau=1 for first T moves (exploration), tau->0 after
+        action_probs = self.mcts.search(canonical_state)
+
+        # Store state + policy target (before temperature adjustment)
+        memory.append((canonical_state, action_probs, player))
+
+        # Temperature-adjusted move sampling
+        temperature_action_probs = (
+            action_probs ** (1 / self.args['temperature'])
+        )
+        temperature_action_probs /= temperature_action_probs.sum()
+        action = np.random.choice(
+            self.game.action_size,
+            p=temperature_action_probs
+        )
+
+        # Apply action
+        state  = self.game.get_next_state(state, action, player)
+
+        # Check terminal
+        value, is_terminal = self.game.get_value_and_terminated(state, action)
+
+        if is_terminal:
+            # Fill in game outcome z for all stored states
+            return_memory = []
+            for hist_state, hist_action_probs, hist_player in memory:
+                # z from the perspective of the player who was moving at that state
+                hist_outcome = (value
+                                if hist_player == player
+                                else self.game.get_opponent_value(value))
+                return_memory.append((
+                    self.game.get_encoded_state(hist_state),  # (3, rows, cols)
+                    hist_action_probs,                         # visit distribution
+                    hist_outcome                               #  in  {'{'}-1, 0, +1{'}'}
+                ))
+            return return_memory
+
+        player = self.game.get_opponent(player)
+</code></pre>
+
+      <div class="callout callout-info" style="margin-top: 1rem;">
+        <strong>Outcome assignment:</strong> At the end of the game, we walk backward through
+        all stored states and assign the correct outcome from each player's perspective. The
+        player who made the winning move gets z=+1; their opponent gets z=-1. Draw gives z=0
+        to both. This produces the (state, pi, z) tuples needed for supervised training.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 3: TRAINING PHASE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        3. Training Phase
+      </h2>
+
+      <pre><code class="language-python">def train(self, memory):
+    """Train network on collected self-play data."""
+    for epoch in range(self.args['num_epochs']):
+        # Shuffle for each epoch
+        random.shuffle(memory)
+
+        # Mini-batch gradient descent
+        for batch_start in range(0, len(memory), self.args['batch_size']):
+            sample = memory[batch_start:batch_start + self.args['batch_size']]
+
+            # Unpack batch
+            state, policy_targets, value_targets = zip(*sample)
+
+            state          = torch.tensor(np.array(state),
+                                          dtype=torch.float32,
+                                          device=self.model.device)
+            policy_targets = torch.tensor(np.array(policy_targets),
+                                          dtype=torch.float32,
+                                          device=self.model.device)
+            value_targets  = torch.tensor(np.array(value_targets),
+                                          dtype=torch.float32,
+                                          device=self.model.device).unsqueeze(1)
+
+            # Forward pass
+            out_policy, out_value = self.model(state)
+
+            # -- Policy loss: cross-entropy --------------------------------
+            # F.cross_entropy expects logits + class probabilities (soft labels)
+            policy_loss = F.cross_entropy(out_policy, policy_targets)
+
+            # -- Value loss: mean squared error ----------------------------
+            value_loss  = F.mse_loss(out_value, value_targets)
+
+            # -- Combined loss ---------------------------------------------
+            loss = policy_loss + value_loss
+
+            # -- Gradient update -------------------------------------------
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+</code></pre>
+    </section>
+
+    <!-- ===================== SECTION 4: TRAINING RESULTS ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        4. Training Results -- Iteration by Iteration
+      </h2>
+
+      <div style="overflow-x: auto; margin-bottom: 1.5rem;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+          <thead>
+            <tr style="background: var(--bg-secondary);">
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Iteration</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Policy Loss</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Value Loss</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Total Loss</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Win Rate vs Random</th>
+              <th style="padding: 0.7rem 1rem; border: 1px solid var(--border);">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1.94</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.21</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); color: var(--accent-orange);">2.15</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); color: var(--text-secondary);">~14% (random)</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Network is random; MCTS provides weak signal</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">5</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1.52</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.19</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1.71</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">31%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Begins to prefer centre columns</td>
+            </tr>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">10</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1.18</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.17</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">1.35</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">48%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Starts recognising winning threats</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">20</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.83</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.14</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.97</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">64%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Blocks opponent threats consistently</td>
+            </tr>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">30</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.61</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.11</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.72</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">72%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Creates double threats; sets traps</td>
+            </tr>
+            <tr style="background:var(--bg-secondary)">
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">40</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.38</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.09</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">0.47</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">79%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Plays opening theory consistently</td>
+            </tr>
+            <tr>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); font-weight: 700; color: var(--accent-green);">49</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); font-weight: 700;">0.19</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); font-weight: 700;">0.06</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); font-weight: 700; color: var(--accent-green);">0.25</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border); font-weight: 700; color: var(--accent-green);">82.5%</td>
+              <td style="padding:0.6rem 1rem;border:1px solid var(--border);">Strong strategic play; rarely loses to random</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-success">
+        <strong>Loss interpretation:</strong> The policy loss starts near log(7) ~= 1.95 (uniform
+        distribution over 7 actions) and decreases as the network learns to concentrate probability
+        mass on good moves. Value loss starts near 0.21 (random predictions of a {'{'}-1,0,+1{'}'} outcome)
+        and decreases as the network learns to evaluate positions.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 5: RTX 5080 PERFORMANCE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        5. Training on RTX 5080
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="text-align: center; border-top: 3px solid var(--accent-green);">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-green);">RTX 5080</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">GPU (Blackwell architecture)</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-blue);">16 GB</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">Total VRAM</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-orange);">~400 MB</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">VRAM in use</div>
+        </div>
+        <div class="stat-card" style="text-align: center;">
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-purple);">36%</div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">GPU utilisation</div>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          GPU utilisation at 36% indicates the bottleneck is not the GPU but the CPU-bound MCTS
+          simulation. Each simulation in MCTS requires:
+        </p>
+        <ol>
+          <li>A selection pass through the tree (pure Python traversal)</li>
+          <li>A neural network evaluation (GPU -- fast)</li>
+          <li>A backpropagation pass (pure Python)</li>
+        </ol>
+        <p>
+          Steps 1 and 3 are Python code running on CPU. With 50 simulations per move and ~20
+          moves per game, that's 1,000 Python tree traversals per game. Python overhead is
+          significant -- a C++ MCTS implementation would likely achieve 70-80% GPU utilisation.
+        </p>
+        <p>
+          Despite this, 16 minutes to reach 82.5% win rate demonstrates that AlphaZero is
+          impressively sample-efficient for Connect Four. The small board (6x7) and limited
+          action space (7) allow rapid convergence compared to Go (19x19) or Chess.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 6: EXPERT ITERATION ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        6. Expert Iteration: Why It Works
+      </h2>
+      <div class="prose">
+        <p>
+          AlphaZero is an instance of <strong>Expert Iteration</strong> (Anthony, Tian, Barber 2017):
+          a policy improvement algorithm that alternates between an "expert" (MCTS) and a "student"
+          (neural network).
+        </p>
+        <p>
+          The key insight is that MCTS is a <em>policy improvement operator</em>: given a network
+          with policy pi, MCTS search produces a better policy pi'. The network then trains to predict
+          pi', becoming better than before. This creates a virtuous cycle:
+        </p>
+      </div>
+
+      <pre style="margin: 1.5rem 0;"><code>
+  Iteration 1:  Network is random
+                -> MCTS with random network ~= slightly-better-than-random pi'
+                -> Train network on pi' -> Network learns tiny improvements
+
+  Iteration 5:  Network knows: "centre columns are good"
+                -> MCTS with this network can plan 5 moves ahead
+                -> pi' includes 5-move winning sequences
+                -> Network learns these tactics
+
+  Iteration 20: Network knows basic strategy
+                -> MCTS plans 8+ moves ahead, creates double threats
+                -> pi' encodes multi-move combinations
+                -> Network learns strategic concepts
+
+  Iteration 49: Network knows openings and middle game
+                -> MCTS plays near-perfectly against random
+                -> pi' is very strong
+                -> Network has effectively compressed MCTS into a fast forward pass
+
+  --- The key: MCTS is always stronger than raw network policy --------------
+      Training the network to imitate MCTS improves the network.
+      A better network makes MCTS even stronger.
+      Repeat.
+</code></pre>
+
+      <div class="callout callout-success">
+        <strong>Why doesn't it collapse?</strong> A naive concern: if the network trains on its
+        own data, won't it just reinforce its own mistakes? AlphaZero avoids this because MCTS
+        <em>corrects</em> the network's biases. Even if the network strongly prefers a bad move,
+        MCTS will discover through simulation that the resulting positions are bad, and give that
+        move low visit counts. The network then learns to avoid it.
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 7: THE VIRTUOUS CYCLE ===================== -->
+    <section style="margin-bottom: 3rem;">
+      <h2 style="font-size: 1.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.2rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+        7. The Virtuous Cycle
+      </h2>
+      <div class="prose">
+        <p>
+          The power of AlphaZero comes from a two-directional feedback loop:
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+        <div class="stat-card" style="border: 2px solid var(--accent-blue);">
+          <h3 style="color: var(--accent-blue); margin-bottom: 0.8rem;">Better Network -> Better MCTS</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            A stronger policy prior P(s,a) guides MCTS to explore good branches first. A stronger
+            value estimate V(s) provides accurate leaf evaluations without rollouts. Together:
+            fewer simulations needed to find the best move.
+          </p>
+        </div>
+        <div class="stat-card" style="border: 2px solid var(--accent-green);">
+          <h3 style="color: var(--accent-green); margin-bottom: 0.8rem;">Better MCTS -> Better Network</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Stronger MCTS produces better policy targets pi and more accurate outcome labels z.
+            Training on better data produces a better network. The network "internalises" the
+            MCTS lookahead into its weights.
+          </p>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>
+          This virtuous cycle is why AlphaZero's strength improves continuously with more
+          training iterations. Unlike supervised learning (which is bounded by the quality of
+          the training data), AlphaZero generates its own increasingly-good training data.
+          The ceiling is only the compute budget and the game complexity.
+        </p>
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+      <a href={`${base}alphazero/network/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        &lt;- Network Architecture
+      </a>
+      <a href={`${base}compare/`}
+         style="padding: 0.7rem 1.4rem; background: var(--accent-green); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        DQN vs AlphaZero ->
+      </a>
+      <a href={`${base}train/`}
+         style="padding: 0.7rem 1.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; font-weight: 600;">
+        Quickstart Guide
+      </a>
+    </div>
+
+  </div>
+</Layout>
